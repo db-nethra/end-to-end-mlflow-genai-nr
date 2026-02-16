@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -21,7 +20,6 @@ import {
   Plus,
   Target,
   Award,
-  TrendingUp,
   Trash2,
   Loader2,
   CheckCircle2,
@@ -34,6 +32,7 @@ import {
   builtinJudgesCode, customJudgesCode, customCodeMetricsCode,
   SAMPLE_EVAL_QUESTIONS, introContent, INITIAL_GUIDELINES,
 } from "./eval-code-snippets";
+import { MultiTurnEvaluation } from "./multi-turn-evaluation";
 
 
 export function EvaluationBuilder() {
@@ -304,16 +303,16 @@ export function EvaluationBuilder() {
       <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
         <CardContent className="pt-6 space-y-3 text-sm text-blue-900/90 dark:text-blue-100/90">
           <p className="font-semibold text-base text-blue-900 dark:text-blue-100">
-            Why evaluation matters: the AI equivalent of data quality testing
+            Why evaluation matters: the AI equivalent of unit tests and data quality checks
           </p>
           <p>
-            If you've built data pipelines or managed a data warehouse, you already understand evaluation intuitively. In the data world, you write <strong>data quality checks</strong> (Great Expectations, dbt tests, custom SQL assertions) to make sure your tables are correct before downstream consumers use them. You wouldn't ship a dashboard without validating that revenue numbers tie out, nulls are handled, and joins didn't fan out.
+            <strong>For software engineers:</strong> LLM judges are the equivalent of <strong>unit tests</strong> for your AI agent. Just like you wouldn't ship code without tests that verify your functions return the right outputs for given inputs, you shouldn't ship an agent without judges that verify it produces quality responses for representative questions. Unit tests give you confidence that your code works correctly—LLM judges give you the same confidence for your agent's outputs.
           </p>
           <p>
-            <strong>LLM judges are the equivalent of data quality tests for AI agents.</strong> Instead of asserting "this column has no nulls," you're asserting "this response uses correct NFL terminology" or "this analysis is grounded in the actual tool call data." Instead of running tests against a staging table, you run judges against a set of representative questions. And just like dbt tests can run in CI and production monitoring, MLflow judges can run in both development and production.
+            <strong>For data engineers:</strong> Think of LLM judges like <strong>data quality testing during pipeline runtime</strong>. Just as you run Great Expectations, dbt tests, or custom SQL assertions to ensure the data flowing through your pipelines is accurate and well-formed before downstream consumers use it, LLM judges validate that your agent's outputs meet quality standards before they reach end users. You wouldn't let a pipeline produce unchecked data for a dashboard—don't let an agent produce unchecked responses for your users.
           </p>
           <p>
-            The difference? Data quality rules check deterministic outputs (a number is either right or wrong). Agent outputs are non-deterministic—the same question can produce different phrasing each time. That's why you need <strong>LLM judges</strong> that can assess semantic quality, not just exact matches.
+            The key difference from both? Unit tests and data quality checks validate deterministic outputs—a number is either right or wrong. Agent outputs are non-deterministic—the same question can produce different phrasing each time. That's why you need <strong>LLM judges</strong> that can assess semantic quality, not just exact matches.
           </p>
         </CardContent>
       </Card>
@@ -504,43 +503,6 @@ export function EvaluationBuilder() {
           </CardContent>
         </Card>
 
-        {/* Third-Party Judges */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Third-Party Judge Integration (MLflow 3.8+)
-            </CardTitle>
-            <br />
-            MLflow 3.8 introduces support for popular evaluation frameworks, allowing you to leverage specialized judges from DeepEval and RAGAS alongside MLflow's built-in judges.
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="outline">DeepEval</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Integrate DeepEval judges for advanced RAG evaluation, hallucination detection, and contextual relevance assessment.
-                </p>
-              </div>
-              <div className="border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="outline">RAGAS</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Use RAGAS judges for retrieval-augmented generation metrics including faithfulness, answer relevance, and context precision.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground">
-                <strong>Coming soon:</strong> Example configurations for DeepEval and RAGAS judges tailored to DC Assistant evaluation.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Run Evaluation Summary & Buttons */}
         <Card>
           <CardContent className="pt-6 space-y-4">
@@ -587,7 +549,7 @@ export function EvaluationBuilder() {
                 disabled={isExperimentLoading || !evaluationRunsUrl}
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
-                View Pre-run Results
+                {evalHasRun ? "View Results" : "View Pre-run Results"}
               </Button>
               <Button
                 size="lg"
@@ -616,38 +578,30 @@ export function EvaluationBuilder() {
           </CardContent>
         </Card>
 
-        {/* Judge Validation Callout */}
-        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-100">
-              <Award className="h-5 w-5" />
-              Great! We've created baseline judges - but we're not done yet
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-amber-900/90 dark:text-amber-100/90">
-            <p>
-              <strong>LLM judges rarely align perfectly with domain experts on the first iteration.</strong> This happens because:
-            </p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>
-                <strong>Implicit expertise:</strong> SMEs have nuanced, context-specific knowledge that's difficult to capture in initial guidelines
-              </li>
-              <li>
-                <strong>Terminology gaps:</strong> Domain-specific language and standards may not be consistently applied without real examples
-              </li>
-              <li>
-                <strong>Edge cases:</strong> Guidelines often miss corner cases that experts intuitively handle but haven't explicitly documented
-              </li>
-              <li>
-                <strong>Calibration issues:</strong> Judges may be systematically too strict or too lenient compared to human judgment
-              </li>
-            </ul>
-            <p className="pt-2 font-medium">
-              <strong>Next step:</strong> We'll collect feedback from SMEs (coaching staff) on how these judges performed. This human validation will help us identify misalignments and refine our evaluation criteria to match expert judgment.
-            </p>
-          </CardContent>
-        </Card>
       </div>
+
+      <MultiTurnEvaluation />
+
+      {/* Bottom Callout - Judges need SME alignment */}
+      <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-100">
+            <Award className="h-5 w-5" />
+            LLM judges give us general signals - but are they aligned with your experts?
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-amber-900/90 dark:text-amber-100/90">
+          <p>
+            We now have both single-turn and session-level judges scoring our agent's outputs. These judges give us <strong>general signals of performance</strong>—relevance, safety, tool efficiency, conversation coherence—but there's a critical question we haven't answered yet:
+          </p>
+          <p>
+            <strong>Do these automated scores actually match what your subject matter experts consider "good"?</strong> A judge might rate a response as highly relevant, but a defensive coordinator might disagree because it missed a key personnel package detail. A session might score well on completeness, but a coach might feel the defensive adjustments weren't actionable enough.
+          </p>
+          <p className="pt-2 font-medium">
+            <strong>Next step:</strong> We'll collect feedback from SMEs (coaching staff) and compare their assessments against our judges' scores. This human validation will reveal where judges and experts disagree, so we can refine our evaluation criteria to truly reflect domain expertise.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 

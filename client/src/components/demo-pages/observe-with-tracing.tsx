@@ -6,6 +6,7 @@ import { MarkdownContent } from "@/components/markdown-content";
 import { DcTracingDemo } from "@/components/dc-assistant/DcTracingDemo";
 import { MultiToolDemo } from "@/components/dc-assistant/MultiToolDemo";
 import { MultiTurnDemo } from "@/components/dc-assistant/MultiTurnDemo";
+import { QuestionTester } from "@/components/dc-assistant/QuestionTester";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { useQueryPreloadedResults } from "@/queries/useQueryPreloadedResults";
@@ -407,6 +408,31 @@ The diff below shows how to add advanced tracing features:`}
           </p>
 
           <MultiTurnDemo />
+        </div>
+      </div>
+
+      {/* Step 5: Question Tester */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-8 h-8 bg-yellow-100 text-yellow-600 rounded-full font-semibold text-sm">
+            5
+          </div>
+          <h3 className="text-lg font-semibold">
+            Question Tester
+          </h3>
+          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+            Testing Only
+          </span>
+        </div>
+
+        <div className="ml-11 space-y-4">
+          <p className="text-muted-foreground">
+            Free-form multi-turn chat for curating session-level evaluation questions.
+            Type any question, send it, and continue the conversation. Hit "New Session"
+            to start a fresh chain of thought.
+          </p>
+
+          <QuestionTester />
         </div>
       </div>
     </div>

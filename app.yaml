@@ -2,102 +2,52 @@ command: [
   "uvicorn",
   "server.app:app"
 ]
-
-# Run as service principal for automatic authentication
-# This eliminates the need for storing OAuth secrets - the app inherits the SP's identity
-run_as:
-  service_principal_name: nethra_austin
-
-permissions:
-  # Model serving endpoints
-  - permission: CAN_QUERY
-    object_type: serving-endpoints
-    object_id: databricks-gpt-5-nano
-  - permission: CAN_QUERY
-    object_type: serving-endpoints
-    object_id: databricks-gpt-5-mini
-  - permission: CAN_QUERY
-    object_type: serving-endpoints
-    object_id: databricks-gpt-5-2
-  # SQL warehouse for Unity Catalog queries
-  - permission: CAN_USE
-    object_type: sql-warehouses
-    object_id: 4b9b953939869799
-
 env:
   - name: 'MLFLOW_TRACKING_URI'
     value: 'databricks'
   - name: 'MLFLOW_EXPERIMENT_ID'
-    value: '2517718719552044'
-  - name: 'DC_ASSISTANT_MODE'
-    value: 'local'
+    value: '1879320556980726'
+  - name: 'LOW_ACCURACY_RESULTS_URL'
+    value: 'placeholder-low-accuracy-url'
+  - name: 'REGRESSION_RESULTS_URL'
+    value: 'placeholder-regression-url'
+  - name: 'METRICS_RESULT_URL'
+    value: 'placeholder-metrics-url'
   - name: 'LLM_MODEL'
-    value: 'databricks-gpt-5-mini'
+    value: 'databricks-claude-3-7-sonnet'
   - name: 'UC_CATALOG'
-    value: 'ac_demo'
+    value: 'nethra_ranganathan'
   - name: 'UC_SCHEMA'
-    value: 'dc_assistant'
+    value: 'mlflow_dc_2'
+  - name: 'MLFLOW_ENABLE_ASYNC_TRACE_LOGGING'
+    value: 'false'
   - name: 'PROMPT_NAME'
-    value: 'ac_demo.dc_assistant.dcassistant'
-  - name: 'DC_ASSISTANT_CONFIG_JSON'
-    value: >
-      {
-        "workspace": {
-          "catalog": "ac_demo",
-          "schema": "dc_assistant"
-        },
-        "data_collection": {
-          "seasons": [2022, 2023, 2024]
-        },
-        "mlflow": {
-          "experiment_id": "2517718719552044"
-        },
-        "prompt_registry": {
-          "prompt_name": "ac_demo.dc_assistant.dcassistant",
-          "reflection_model": "databricks:/databricks-gpt-5-2"
-        },
-        "llm": {
-          "endpoint_name": "databricks-gpt-5-mini",
-          "judge_model": "databricks:/databricks-gpt-5-2"
-        },
-        "model": {
-          "model_name": "ac_dc_assistant",
-          "uc_model_name": "ac_demo.dc_assistant.ac_dc_assistant"
-        },
-        "evaluation": {
-          "dataset_name": "ac_demo.dc_assistant.dc_assistant_eval_trace_data",
-          "label_schema_name": "football_analysis_base",
-          "labeling_session_name": "dcassistant_eval_labeling",
-          "assigned_users": ["austin.choi@databricks.com"]
-        },
-        "judges": {
-          "aligned_judge_name": "football_analysis_judge_align"
-        },
-        "optimization": {
-          "optimization_dataset_name": "ac_demo.dc_assistant.dcassistant_optimization_data"
-        },
-        "alignment": {
-          "alignment_runs_table": "ac_demo.dc_assistant.alignment_runs"
-        },
-        "tools": {
-          "uc_tool_names": [
-            "ac_demo.dc_assistant.who_got_ball_by_down_distance",
-            "ac_demo.dc_assistant.who_got_ball_by_offense_situation",
-            "ac_demo.dc_assistant.tendencies_by_offense_formation",
-            "ac_demo.dc_assistant.tendencies_by_down_distance",
-            "ac_demo.dc_assistant.tendencies_by_drive_start",
-            "ac_demo.dc_assistant.tendencies_by_score_2nd_half",
-            "ac_demo.dc_assistant.tendencies_two_minute_drill",
-            "ac_demo.dc_assistant.who_got_ball_by_down_distance_and_form",
-            "ac_demo.dc_assistant.who_got_ball_two_minute_drill",
-            "ac_demo.dc_assistant.first_play_after_turnover",
-            "ac_demo.dc_assistant.screen_play_tendencies",
-            "ac_demo.dc_assistant.success_by_pass_rush_and_coverage"
-          ]
-        },
-        "prompt_registry_auth": {
-          "use_service_principal": true,
-          "service_principal_id": "5d5718d0-82bc-4a3f-980f-ae56b792a273",
-          "databricks_host": "https://e2-demo-field-eng.cloud.databricks.com/"
-        }
-      }
+    value: 'dc_assistant_system_prompt'
+  - name: 'PROMPT_ALIAS'
+    value: 'production'
+  - name: 'REGRESSION_BASELINE_RUN_ID'
+    value: 'placeholder-regression-baseline-run-id'
+  - name: 'FIX_QUALITY_BASELINE_RUN_ID'
+    value: 'placeholder-fix-quality-baseline-run-id'
+  - name: 'SAMPLE_LABELING_SESSION_ID'
+    value: 'placeholder-sample-labeling-session-id'
+  - name: 'SAMPLE_REVIEW_APP_URL'
+    value: 'placeholder-sample-review-app-url'
+  - name: 'SAMPLE_LABELING_TRACE_ID'
+    value: 'placeholder-sample-labeling-trace-id'
+  - name: 'SAMPLE_TRACE_ID'
+    value: 'tr-da4dfb0dc7668dbccd0f8ba28e3e56d5'
+  - name: 'LHA_SOURCE_CODE_PATH'
+    value: '/Workspace/Users/nethra.ranganathan@databricks.com/mlflow-demo'
+  - name: 'NOTEBOOK_URL_0_demo_overview'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221629'
+  - name: 'NOTEBOOK_URL_1_observe_with_traces'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221670'
+  - name: 'NOTEBOOK_URL_2_create_quality_metrics'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221674'
+  - name: 'NOTEBOOK_URL_3_find_fix_quality_issues'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221656'
+  - name: 'NOTEBOOK_URL_4_human_review'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221726'
+  - name: 'NOTEBOOK_URL_5_production_monitoring'
+    value: 'https://e2-demo-field-eng.cloud.databricks.com/editor/notebooks/808413184221774'

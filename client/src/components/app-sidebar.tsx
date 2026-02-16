@@ -20,6 +20,7 @@ import {
   BookOpen,
   Globe,
   Trophy,
+  HelpCircle,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -31,6 +32,9 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -52,7 +56,7 @@ const data = {
 
     {
       title: "DC Assistant",
-      value: "dc-assistant",
+      value: "step1-tracing",
       icon: Trophy,
     },
   ],
@@ -96,7 +100,7 @@ const data = {
       description: "Automatically improve prompts with GEPA optimizer",
     },
     {
-      title: "Continuous Loop",
+      title: "Ongoing Monitoring",
       value: "step6-human-review",
       icon: Users,
       description:
@@ -202,7 +206,7 @@ export function AppSidebar({
         {children}
 
         <NavSteps items={data.mlflowSteps} />
-        <NavMain items={data.navMain} label="Use the sample app" />
+        <NavMain items={data.navMain} label="Try the DC Assistant" />
         <NavDocuments
           // selectedAgent={selectedAgent}
           // setSelectedAgent={setSelectedAgent}
@@ -212,6 +216,14 @@ export function AppSidebar({
           // isStreamingEnabled={isStreamingEnabled}
           // setIsStreamingEnabled={setIsStreamingEnabled}
         />
+        <SidebarGroup>
+          <SidebarGroupLabel>Have questions or feedback?</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <p className="px-3 text-xs text-muted-foreground">
+              Reach out to Nethra Ranganathan or Austin Choi
+            </p>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <NavSecondary items={data.resources} label="Get started on your own" />
       </SidebarContent>
       {/* <SidebarFooter>

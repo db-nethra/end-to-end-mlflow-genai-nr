@@ -33,47 +33,26 @@ const NFL_TEAMS = [
   "Seattle Seahawks", "Tampa Bay Buccaneers", "Tennessee Titans", "Washington Commanders"
 ];
 
-// Analysis types with their specific parameters (matching actual UC functions)
+// Analysis types - each maps to a single UC function tool call
 const ANALYSIS_TYPES = [
   {
-    id: "3rd-down",
-    label: "3rd Down Analysis",
-    tool: "who_got_ball_by_down_distance",
+    id: "down-distance",
+    label: "Down & Distance Tendencies",
+    tool: "tendencies_by_down_distance",
     parameters: ["distance"],
     options: { distance: ["short", "medium", "long"] }
   },
   {
-    id: "formation",
-    label: "Offense Formation Tendencies",
-    tool: "tendencies_by_offense_formation",
+    id: "post-turnover",
+    label: "Post-Turnover Offense",
+    tool: "first_play_after_turnover",
     parameters: [],
     options: {}
   },
   {
-    id: "drive-start",
-    label: "Drive Start Tendencies",
-    tool: "tendencies_by_drive_start",
-    parameters: [],
-    options: {}
-  },
-  {
-    id: "pass-rush",
-    label: "Pass Rush & Coverage",
-    tool: "success_by_pass_rush_and_coverage",
-    parameters: [],
-    options: {}
-  },
-  {
-    id: "two-minute",
-    label: "Two Minute Drill",
+    id: "end-of-halves",
+    label: "End of Halves",
     tool: "tendencies_two_minute_drill",
-    parameters: [],
-    options: {}
-  },
-  {
-    id: "screen-plays",
-    label: "Screen Play Tendencies",
-    tool: "screen_play_tendencies",
     parameters: [],
     options: {}
   },
@@ -92,14 +71,14 @@ interface DcTracingDemoProps {
 
 const QUICK_SELECT_QUESTIONS = [
   {
-    id: "patriots-blitz",
-    label: "Patriots vs the Blitz",
-    question: "How do the Patriots attack the blitz?",
+    id: "panthers-2nd-short",
+    label: "Panthers 2nd & Short",
+    question: "How do the 2024 Carolina Panthers run vs. pass on 2nd and short?",
   },
   {
-    id: "titans-3rd-long",
-    label: "Titans on 3rd and Long",
-    question: "What do the 2024 Titans do on 3rd and long?",
+    id: "chargers-turnover",
+    label: "Chargers Post-Turnover",
+    question: "How do the 2023 Chargers handle offense after a turnover?",
   },
 ];
 
@@ -144,26 +123,20 @@ export function DcTracingDemo({ onTraceGenerated }: DcTracingDemoProps = {}) {
       return "Select team and analysis type to generate question...";
     }
 
-    const seasonText = selectedSeasons.length > 0
+    const yearText = selectedSeasons.length > 0
       ? selectedSeasons.length === 1
-        ? `in ${selectedSeasons[0]}`
-        : `in ${selectedSeasons.join(" and ")}`
+        ? selectedSeasons[0]
+        : selectedSeasons.join(" and ")
       : "";
 
     switch (selectedAnalysisType) {
-      case "3rd-down":
+      case "down-distance":
         const distance = parameters.distance || "medium";
-        return `What do the ${selectedTeam} do on 3rd and ${distance} ${seasonText}?`;
-      case "formation":
-        return `What are the ${selectedTeam}'s most common offensive formations ${seasonText}?`;
-      case "drive-start":
-        return `What are the ${selectedTeam}'s tendencies at the start of drives ${seasonText}?`;
-      case "pass-rush":
-        return `How do the ${selectedTeam} perform against the pass rush ${seasonText}?`;
-      case "two-minute":
-        return `What do the ${selectedTeam} do in two minute drill situations ${seasonText}?`;
-      case "screen-plays":
-        return `What are the ${selectedTeam}'s screen play tendencies ${seasonText}?`;
+        return `How do the ${yearText} ${selectedTeam} offense handle 3rd and ${distance} situations?`;
+      case "post-turnover":
+        return `How do the ${yearText} ${selectedTeam} handle offense after a turnover?`;
+      case "end-of-halves":
+        return `How do the ${yearText} ${selectedTeam} handle the end of halves?`;
       default:
         return "Select analysis type to generate question...";
     }

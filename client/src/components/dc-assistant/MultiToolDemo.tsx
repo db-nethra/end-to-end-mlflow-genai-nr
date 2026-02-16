@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Send, ExternalLink, CheckCircle2, Wrench } from "lucide-react";
+import { Loader2, Send, ExternalLink, CheckCircle2, ThumbsUp, ThumbsDown, Wrench } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 
 // Strip catalog.schema prefix from tool names for cleaner display
 const formatToolName = (name: string) => {
@@ -52,6 +53,9 @@ export function MultiToolDemo() {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
   const [traceUrlTemplate, setTraceUrlTemplate] = useState<string>("");
+  const [feedbackRating, setFeedbackRating] = useState<"up" | "down" | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   // Fetch experiment info on mount
   React.useEffect(() => {
@@ -80,6 +84,9 @@ export function MultiToolDemo() {
     setStreamingContent("");
     setToolCalls([]);
     setCurrentTraceId(null);
+    setFeedbackRating(null);
+    setFeedbackComment("");
+    setFeedbackSubmitted(false);
 
     const requestData = {
       question: questionData.question
@@ -159,6 +166,36 @@ export function MultiToolDemo() {
     } finally {
       setLoading(false);
       setIsStreaming(false);
+    }
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackRating || !currentTraceId) return;
+
+    try {
+      const response = await fetch("/api/dc-assistant/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          trace_id: currentTraceId,
+          rating: feedbackRating,
+          comment: feedbackComment || undefined,
+          user_name: "Coach",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setFeedbackSubmitted(true);
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      console.error("Error submitting feedback:", err);
+      setError("Failed to submit feedback");
     }
   };
 
@@ -270,27 +307,96 @@ export function MultiToolDemo() {
               <div className="space-y-4">
                 <MarkdownContent content={streamingContent} />
 
-                {/* Trace Section - only show if we have both template and trace ID */}
-                {!isStreaming && traceUrlTemplate && currentTraceId && (
-                  <div className="border-t pt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium">
-                        See multi-tool trace in MLflow UI
-                      </h4>
-                      <Button
-                        variant="default"
-                        size="lg"
-                        onClick={() => {
-                          const traceUrl = `${traceUrlTemplate}${currentTraceId}`;
-                          window.open(traceUrl, '_blank');
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        View Trace
-                      </Button>
+                {/* Feedback and Trace - show after streaming completes */}
+                {!isStreaming && (
+                  <>
+                    {/* Feedback Section */}
+                    <div className="border-t pt-6">
+                      <h4 className="font-medium mb-4">How is this response?</h4>
+
+                      {feedbackSubmitted ? (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-5 w-5" />
+                          <span className="font-medium">
+                            Thank you for your feedback!
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="flex gap-4">
+                            <Button
+                              variant={feedbackRating === "up" ? "default" : "outline"}
+                              size="lg"
+                              onClick={() => setFeedbackRating("up")}
+                              className="flex-1"
+                            >
+                              <ThumbsUp className="mr-2 h-5 w-5" />
+                              Good
+                            </Button>
+                            <Button
+                              variant={feedbackRating === "down" ? "default" : "outline"}
+                              size="lg"
+                              onClick={() => setFeedbackRating("down")}
+                              className="flex-1"
+                            >
+                              <ThumbsDown className="mr-2 h-5 w-5" />
+                              Needs Improvement
+                            </Button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="multi-feedback-comment">
+                              Additional Comments (Optional)
+                            </Label>
+                            <Textarea
+                              id="multi-feedback-comment"
+                              value={feedbackComment}
+                              onChange={(e) => setFeedbackComment(e.target.value)}
+                              placeholder="What could be improved? What did you like?"
+                              rows={3}
+                            />
+                          </div>
+
+                          <Button
+                            onClick={handleFeedbackSubmit}
+                            disabled={!feedbackRating || !currentTraceId}
+                            className="w-full"
+                          >
+                            Submit Feedback
+                          </Button>
+
+                          {!currentTraceId && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              Trace ID required for feedback submission
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
+
+                    {/* Trace Section - only show if we have both template and trace ID */}
+                    {traceUrlTemplate && currentTraceId && (
+                      <div className="border-t pt-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-medium">
+                            See multi-tool trace in MLflow UI
+                          </h4>
+                          <Button
+                            variant="default"
+                            size="lg"
+                            onClick={() => {
+                              const traceUrl = `${traceUrlTemplate}${currentTraceId}`;
+                              window.open(traceUrl, '_blank');
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            View Trace
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : null}
