@@ -1,0 +1,31 @@
+
+# Python virtual environments
+.venv/
+__pycache__/
+
+# Databricks
+.databricks
+mlruns
+
+# Environment files
+.env.local
+.env.dev
+
+# OS files
+.DS_Store
+
+# Frontend dependencies and build outputs
+node_modules/
+client/node_modules/
+client/dist/
+package-lock.json
+client/package-lock.json
+
+# Generated API client
+client/src/fastapi_client/
+
+
+email_app/
+
+app.yaml.previous
+.setup_progress.json
