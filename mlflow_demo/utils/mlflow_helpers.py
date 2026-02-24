@@ -41,6 +41,8 @@ def setup_local_ide_env():
       current_dir = os.path.dirname(current_dir)
 
   sys.path.append('../')
+  link_experiment_to_uc_schema()
+  setup_tracing_destination()
 
 
 def setup_databricks_notebook_env():
@@ -68,6 +70,81 @@ def setup_databricks_notebook_env():
   os.environ.update(env_vars)
 
   mlflow.set_experiment(experiment_id=os.getenv('MLFLOW_EXPERIMENT_ID'))
+  link_experiment_to_uc_schema()
+  setup_tracing_destination()
+
+
+def link_experiment_to_uc_schema():
+  """Link the MLflow experiment to a Unity Catalog schema for trace storage.
+
+  This is a one-time setup that creates three UC tables for storing trace data:
+    - {catalog}.{schema}.mlflow_experiment_trace_otel_logs
+    - {catalog}.{schema}.mlflow_experiment_trace_otel_metrics
+    - {catalog}.{schema}.mlflow_experiment_trace_otel_spans
+
+  Idempotent: safe to call on every notebook run. If already linked, this is a no-op.
+  Requires UC_CATALOG, UC_SCHEMA, MLFLOW_EXPERIMENT_ID, and MLFLOW_TRACING_SQL_WAREHOUSE_ID.
+  """
+  import os
+
+  import mlflow
+  from mlflow.entities import UCSchemaLocation
+  from mlflow.tracing.enablement import set_experiment_trace_location
+
+  uc_catalog = os.getenv('UC_CATALOG')
+  uc_schema = os.getenv('UC_SCHEMA')
+  experiment_id = os.getenv('MLFLOW_EXPERIMENT_ID')
+  warehouse_id = os.getenv('MLFLOW_TRACING_SQL_WAREHOUSE_ID')
+
+  if not all([uc_catalog, uc_schema, experiment_id, warehouse_id]):
+    return
+
+  try:
+    os.environ['MLFLOW_TRACING_SQL_WAREHOUSE_ID'] = warehouse_id
+    set_experiment_trace_location(
+      location=UCSchemaLocation(
+        catalog_name=uc_catalog,
+        schema_name=uc_schema,
+      ),
+      experiment_id=experiment_id,
+    )
+  except Exception:
+    # Already linked or insufficient permissions — safe to ignore
+    pass
+
+
+def setup_tracing_destination():
+  """Configure MLflow tracing to log traces directly to a Unity Catalog schema.
+
+  Requires UC_CATALOG, UC_SCHEMA, and MLFLOW_TRACING_SQL_WAREHOUSE_ID environment variables.
+  Sets MLFLOW_TRACING_DESTINATION env var and calls the Python API as belt-and-suspenders.
+  """
+  import os
+  import mlflow
+  from mlflow.entities import UCSchemaLocation
+
+  uc_catalog = os.getenv('UC_CATALOG')
+  uc_schema = os.getenv('UC_SCHEMA')
+  warehouse_id = os.getenv('MLFLOW_TRACING_SQL_WAREHOUSE_ID')
+
+  if not uc_catalog or not uc_schema:
+    print('⚠️ UC_CATALOG or UC_SCHEMA not set - skipping UC tracing destination setup')
+    return
+
+  if not warehouse_id:
+    print('⚠️ MLFLOW_TRACING_SQL_WAREHOUSE_ID not set - skipping UC tracing destination setup')
+    return
+
+  # Set env var as fallback
+  os.environ['MLFLOW_TRACING_DESTINATION'] = f'{uc_catalog}.{uc_schema}'
+
+  # Set destination via Python API
+  mlflow.tracing.set_destination(
+    destination=UCSchemaLocation(
+      catalog_name=uc_catalog,
+      schema_name=uc_schema,
+    )
+  )
 
 
 def get_mlflow_experiment_id() -> Optional[str]:

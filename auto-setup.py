@@ -716,6 +716,84 @@ class AutoSetup:
       except KeyboardInterrupt:
         return suggested_model or available_models[0]
 
+  def _get_available_sql_warehouses(self) -> list:
+    """Get list of available SQL warehouses from Databricks."""
+    try:
+      spinner = Spinner('Discovering available SQL warehouses...')
+      spinner.start()
+      try:
+        warehouses = list(self.client.warehouses.list())
+        spinner.stop('Found SQL warehouses')
+      except Exception as e:
+        spinner.stop()
+        raise e
+
+      available = []
+      for wh in warehouses:
+        state = getattr(wh, 'state', 'UNKNOWN')
+        name = getattr(wh, 'name', 'Unknown')
+        wh_id = getattr(wh, 'id', None)
+        if wh_id:
+          available.append({'id': wh_id, 'name': name, 'state': str(state)})
+
+      return available
+
+    except Exception as e:
+      print(f'⚠️  Could not discover SQL warehouses: {e}')
+      return []
+
+  def _prompt_for_sql_warehouse(self) -> str:
+    """Interactive SQL warehouse selection for MLflow tracing."""
+    print('\n🏭 SQL Warehouse Selection (for MLflow Tracing)')
+    print('   MLflow traces will be logged to Unity Catalog tables via this warehouse.\n')
+
+    available = self._get_available_sql_warehouses()
+
+    if not available:
+      print('No SQL warehouses found. Please enter a warehouse ID manually.')
+      while True:
+        wh_id = input('SQL Warehouse ID: ').strip()
+        if wh_id:
+          return wh_id
+        print('❌ Warehouse ID cannot be empty')
+
+    print('Available SQL warehouses:')
+    for i, wh in enumerate(available):
+      state_indicator = '🟢' if 'RUNNING' in wh['state'] else '🔴'
+      print(f'   {i}. {wh["name"]} ({wh["id"]}) {state_indicator} {wh["state"]}')
+
+    manual_entry_idx = len(available)
+    print(f'   {manual_entry_idx}. Enter warehouse ID manually')
+
+    while True:
+      try:
+        choice = input(f'\nSelect warehouse (0-{manual_entry_idx}): ').strip()
+
+        try:
+          choice_num = int(choice)
+          if 0 <= choice_num < len(available):
+            selected = available[choice_num]
+            print(f'✅ Selected: {selected["name"]} ({selected["id"]})')
+            return selected['id']
+          elif choice_num == manual_entry_idx:
+            wh_id = input('SQL Warehouse ID: ').strip()
+            if wh_id:
+              return wh_id
+            print('❌ Warehouse ID cannot be empty')
+            continue
+          else:
+            print(f'❌ Please enter a number between 0 and {manual_entry_idx}')
+            continue
+        except ValueError:
+          # User typed an ID directly
+          if choice:
+            return choice
+          print('❌ Invalid input')
+          continue
+
+      except KeyboardInterrupt:
+        return available[0]['id'] if available else ''
+
   def _generate_default_app_name(self) -> str:
     """Generate a default app name with 4 random characters."""
     import os
@@ -783,6 +861,7 @@ class AutoSetup:
           'UC_SCHEMA': 'UC_SCHEMA',
           'DATABRICKS_APP_NAME': 'DATABRICKS_APP_NAME',
           'LLM_MODEL': 'LLM_MODEL',
+          'MLFLOW_TRACING_SQL_WAREHOUSE_ID': 'MLFLOW_TRACING_SQL_WAREHOUSE_ID',
           'DEPLOYMENT_MODE': 'DEPLOYMENT_MODE',
           'MLFLOW_EXPERIMENT_ID': 'MLFLOW_EXPERIMENT_ID',
           'LHA_SOURCE_CODE_PATH': 'LHA_SOURCE_CODE_PATH',
@@ -1027,6 +1106,9 @@ class AutoSetup:
     # LLM model selection
     llm_model = self._prompt_for_llm_model('databricks-claude-3-7-sonnet')
 
+    # SQL warehouse selection for MLflow tracing
+    sql_warehouse_id = self._prompt_for_sql_warehouse()
+
     # Store configuration
     self.config = {
       'DATABRICKS_HOST': workspace_url,
@@ -1034,6 +1116,7 @@ class AutoSetup:
       'UC_SCHEMA': schema,
       'DATABRICKS_APP_NAME': app_name,
       'LLM_MODEL': llm_model,
+      'MLFLOW_TRACING_SQL_WAREHOUSE_ID': sql_warehouse_id,
       'DEPLOYMENT_MODE': deployment_mode,
     }
 
@@ -1057,6 +1140,7 @@ class AutoSetup:
       'UC_SCHEMA',
       'DATABRICKS_APP_NAME',
       'LLM_MODEL',
+      'MLFLOW_TRACING_SQL_WAREHOUSE_ID',
     ]
 
     for var in required_at_this_stage:
@@ -1132,6 +1216,8 @@ class AutoSetup:
     # LLM model
     llm_model = self.config.get('LLM_MODEL', 'Unknown')
     print(f'🤖 LLM Model: {llm_model}')
+    sql_warehouse_id = self.config.get('MLFLOW_TRACING_SQL_WAREHOUSE_ID', 'Unknown')
+    print(f'🏭 SQL Warehouse (Tracing): {sql_warehouse_id}')
 
     # Sample data
     print('\n📊 Sample Data Setup:')

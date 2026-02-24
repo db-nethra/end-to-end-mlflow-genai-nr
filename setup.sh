@@ -70,6 +70,7 @@ if [ -f "$ENV_FILE" ]; then
             UC_SCHEMA=""
             LLM_MODEL=""
             DATABRICKS_CONFIG_PROFILE=""
+            MLFLOW_TRACING_SQL_WAREHOUSE_ID=""
             ;;
         *)
             echo "❌ Invalid choice. Exiting."
@@ -95,6 +96,7 @@ if [[ $REPLY != "3" ]]; then
         MLFLOW_EXPERIMENT_ID=$(prompt_with_existing "MLFLOW_EXPERIMENT_ID" "MLFLOW_EXPERIMENT_ID")
         UC_CATALOG=$(prompt_with_existing "UC_CATALOG" "UC_CATALOG")
         UC_SCHEMA=$(prompt_with_existing "UC_SCHEMA" "UC_SCHEMA")
+        MLFLOW_TRACING_SQL_WAREHOUSE_ID=$(prompt_with_existing "MLFLOW_TRACING_SQL_WAREHOUSE_ID" "MLFLOW_TRACING_SQL_WAREHOUSE_ID (SQL warehouse for trace storage)")
 
         # Optional variables
         echo ""
@@ -108,6 +110,7 @@ if [[ $REPLY != "3" ]]; then
         read -p "MLFLOW_EXPERIMENT_ID (MLflow experiment ID): " MLFLOW_EXPERIMENT_ID
         read -p "UC_CATALOG (Unity Catalog name in which you have a schema with EDIT permissions): " UC_CATALOG
         read -p "UC_SCHEMA (Unity Catalog schema name where you have EDIT permissions): " UC_SCHEMA
+        read -p "MLFLOW_TRACING_SQL_WAREHOUSE_ID (SQL warehouse ID for MLflow trace storage): " MLFLOW_TRACING_SQL_WAREHOUSE_ID
 
         # Optional variables
         echo ""
@@ -149,6 +152,10 @@ EOF
     echo "PROMPT_NAME=\"email_generation\"" >> "$ENV_FILE"
     echo "PROMPT_ALIAS=\"production\"" >> "$ENV_FILE"
     echo "MLFLOW_TRACKING_URI=\"databricks\"" >> "$ENV_FILE"
+    if [ ! -z "$MLFLOW_TRACING_SQL_WAREHOUSE_ID" ]; then
+        echo "MLFLOW_TRACING_SQL_WAREHOUSE_ID=\"$MLFLOW_TRACING_SQL_WAREHOUSE_ID\"" >> "$ENV_FILE"
+        echo "MLFLOW_TRACING_DESTINATION=\"${UC_CATALOG}.${UC_SCHEMA}\"" >> "$ENV_FILE"
+    fi
 
     echo ""
     echo "✅ .env.local file created successfully!"
@@ -167,6 +174,10 @@ EOF
     fi
     if [ ! -z "$DATABRICKS_CONFIG_PROFILE" ]; then
         echo "  DATABRICKS_CONFIG_PROFILE: $DATABRICKS_CONFIG_PROFILE"
+    fi
+    if [ ! -z "$MLFLOW_TRACING_SQL_WAREHOUSE_ID" ]; then
+        echo "  MLFLOW_TRACING_SQL_WAREHOUSE_ID: $MLFLOW_TRACING_SQL_WAREHOUSE_ID"
+        echo "  MLFLOW_TRACING_DESTINATION: ${UC_CATALOG}.${UC_SCHEMA}"
     fi
 fi
 
