@@ -1,4 +1,10 @@
 
+# IDE and tooling
+.ai-dev-kit/
+.claude/
+.cursor/
+.mcp.json
+
 # Python virtual environments
 .venv/
 __pycache__/
