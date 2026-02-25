@@ -67,7 +67,7 @@ class MultiTurnResponse(BaseModel):
 
 async def _generate_with_local_agent(question: str):
   """Generate response using local agent."""
-  from mlflow_demo.agent import AGENT
+  from mlflow_demo.agent.agent import AGENT
 
   done_sent = False
   full_response = ''
@@ -231,7 +231,7 @@ async def multi_turn_conversation(request: MultiTurnRequest):
   The agent manages conversation history internally and sets session metadata
   on MLflow traces so related turns are grouped together.
   """
-  from mlflow_demo.agent import AGENT
+  from mlflow_demo.agent.agent import AGENT
   from mlflow.types.responses import Message, ResponsesAgentRequest
 
   try:

@@ -97,7 +97,7 @@ async def run_evaluation(request: RunEvalRequest):
 
       # Build evaluation data - match notebook pattern
       # 'input' key matches predict_fn parameter name
-      from mlflow_demo.agent import AGENT
+      from mlflow_demo.agent.agent import AGENT
 
       eval_data = [
         {'inputs': {'input': [{'role': 'user', 'content': q}]}}

@@ -45,58 +45,71 @@ dbutils = get_dbutils()
 
 # ============================================================================
 # Load shared configuration from multiple sources (in priority order):
-# 1. config/dc_assistant.json file
+# 1. config/dc_assistant.json file (base config, including tools)
 # 2. DC_ASSISTANT_CONFIG_JSON environment variable
-# 3. Individual environment variables from app.yaml
+# 3. Individual environment variables from app.yaml / .env.local
+#
+# Environment variables (UC_CATALOG, UC_SCHEMA, PROMPT_NAME, LLM_MODEL)
+# always override the base config when set. This allows the JSON file to
+# hold tool definitions and defaults while .env.local controls the workspace.
+# Before app deployment, these values will be propagated to dc_assistant.json.
 # ============================================================================
 def load_config() -> dict:
-    """Load configuration from file, JSON env var, or individual env vars."""
-    # Priority 1: Config file
+    """Load configuration from file, JSON env var, or individual env vars.
+
+    Environment variables UC_CATALOG, UC_SCHEMA, PROMPT_NAME, and LLM_MODEL
+    override corresponding values in the base config when present.
+    """
+    config = None
+
+    # Priority 1: Config file (base config with tools, auth defaults, etc.)
     config_path = Path(__file__).parent / "config" / "dc_assistant.json"
     if config_path.exists():
-        return json.loads(config_path.read_text())
+        config = json.loads(config_path.read_text())
 
     # Priority 2: JSON config env var
-    config_env = os.getenv("DC_ASSISTANT_CONFIG_JSON")
-    if config_env:
-        return json.loads(config_env)
+    if config is None:
+        config_env = os.getenv("DC_ASSISTANT_CONFIG_JSON")
+        if config_env:
+            config = json.loads(config_env)
 
-    # Priority 3: Build config from individual env vars (app.yaml style)
-    prompt_name = os.getenv("PROMPT_NAME")
-    llm_model = os.getenv("LLM_MODEL")
-    uc_catalog = os.getenv("UC_CATALOG")
-    uc_schema = os.getenv("UC_SCHEMA")
-
-    if prompt_name and llm_model:
-        # Build a minimal config from env vars
-        return {
-            "workspace": {
-                "catalog": uc_catalog or "ac_demo",
-                "schema": uc_schema or "dc_assistant"
-            },
-            "prompt_registry": {
-                "prompt_name": prompt_name
-            },
-            "llm": {
-                "endpoint_name": llm_model
-            },
-            "tools": {
-                "uc_tool_names": []  # Will need to be set via DC_ASSISTANT_CONFIG_JSON for full functionality
-            },
+    # Priority 3: Build minimal config from env vars if no file/JSON found
+    if config is None:
+        prompt_name = os.getenv("PROMPT_NAME")
+        llm_model = os.getenv("LLM_MODEL")
+        if not (prompt_name and llm_model):
+            raise FileNotFoundError(
+                "Configuration not found. Set one of: "
+                "config/dc_assistant.json file, DC_ASSISTANT_CONFIG_JSON env var, "
+                "or PROMPT_NAME + LLM_MODEL env vars"
+            )
+        config = {
+            "workspace": {"catalog": "", "schema": ""},
+            "prompt_registry": {"prompt_name": ""},
+            "llm": {"endpoint_name": ""},
+            "tools": {"uc_tool_names": []},
             "prompt_registry_auth": {
                 "use_oauth": True,
                 "secret_scope_name": os.getenv("SECRET_SCOPE_NAME", "dc-assistant-secrets"),
                 "oauth_client_id_key": os.getenv("OAUTH_CLIENT_ID_KEY", "oauth-client-id"),
                 "oauth_client_secret_key": os.getenv("OAUTH_CLIENT_SECRET_KEY", "oauth-client-secret"),
-                "databricks_host": os.getenv("DATABRICKS_HOST", "")
-            }
+                "databricks_host": os.getenv("DATABRICKS_HOST", ""),
+            },
         }
 
-    raise FileNotFoundError(
-        "Configuration not found. Set one of: "
-        "config/dc_assistant.json file, DC_ASSISTANT_CONFIG_JSON env var, "
-        "or PROMPT_NAME + LLM_MODEL env vars"
-    )
+    # Apply env var overrides — these always win when set
+    if os.getenv("UC_CATALOG"):
+        config["workspace"]["catalog"] = os.environ["UC_CATALOG"]
+    if os.getenv("UC_SCHEMA"):
+        config["workspace"]["schema"] = os.environ["UC_SCHEMA"]
+    if os.getenv("PROMPT_NAME"):
+        config["prompt_registry"]["prompt_name"] = os.environ["PROMPT_NAME"]
+    if os.getenv("LLM_MODEL"):
+        config["llm"]["endpoint_name"] = os.environ["LLM_MODEL"]
+    if os.getenv("DATABRICKS_HOST"):
+        config.setdefault("prompt_registry_auth", {})["databricks_host"] = os.environ["DATABRICKS_HOST"]
+
+    return config
 
 CONFIG = load_config()
 

@@ -16,13 +16,20 @@ import dotenv
 dotenv.load_dotenv(project_root / '.env.local')
 
 # allow databricks-cli auth to take over
-os.environ.pop('DATABRICKS_HOST', None)
+os.environ.pop('DATABRICKS_TOKEN', None)
 
 import logging
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger("mlflow").setLevel(logging.ERROR)
 
-from mlflow_demo.agent.email_generator import EmailGenerator
+# Link the experiment to UC schema and set tracing destination
+# This ensures the OTEL spans tables exist before we log traces
+from mlflow_demo.utils.mlflow_helpers import link_experiment_to_uc_schema, setup_tracing_destination
+mlflow.set_experiment(experiment_id=os.environ['MLFLOW_EXPERIMENT_ID'])
+link_experiment_to_uc_schema()
+setup_tracing_destination()
+
+from mlflow_demo.agent.agent import AGENT
 
 PROMPT_NAME = os.getenv('PROMPT_NAME')
 PROMPT_ALIAS = os.getenv('PROMPT_ALIAS')
@@ -61,36 +68,39 @@ def write_env_variable(key, value):
   print(f'✅ Updated {key} in .env.local')
 
 
-def generate_email_for_customer(customer_data, line_num):
-  """Generate email for a single customer."""
+def generate_trace_for_question(question, line_num):
+  """Generate a trace by asking the DC assistant a question."""
   try:
-    customer_name = customer_data.get("account", {}).get("name", "Unknown")
-    print(f'Creating sample trace {line_num}: {customer_name}')
+    print(f'Creating sample trace {line_num}: {question[:60]}...')
 
-    generator = EmailGenerator()
-    user_input = customer_data.get("user_input")
-    email_result = generator.generate_email_with_retrieval(customer_name, user_input)
+    from mlflow.types.responses import Message, ResponsesAgentRequest
 
-    # Add metadata
-    email_result['customer_name'] = customer_name
-    email_result['line_number'] = line_num
+    request = ResponsesAgentRequest(
+      input=[Message(role='user', content=question)]
+    )
+    response = AGENT.predict(request)
+
+    trace_id = mlflow.get_last_active_trace_id()
 
     # add a tag so we know what is our sample data
-    mlflow.set_trace_tag(trace_id=email_result['trace_id'], key='sample_data', value='yes')
-    return email_result, None
+    if trace_id:
+      mlflow.set_trace_tag(trace_id=trace_id, key='sample_data', value='yes')
+
+    return {'trace_id': trace_id, 'question': question, 'line_number': line_num}, None
 
   except Exception as e:
-    error_msg = f'Error generating email for line {line_num}: {e}'
+    error_msg = f'Error generating trace for line {line_num}: {e}'
     print(error_msg)
     return None, error_msg
 
 
-def process_input_data(input_file='input_data.jsonl', max_workers=5, max_records=50):
-  """Load input_data.jsonl and run generate_email for every row in parallel.
+def process_input_data(input_file='input_data.jsonl', max_workers=3, max_records=10):
+  """Load input_data.jsonl and run the DC assistant for every question.
 
   Args:
       input_file (str): Path to input JSONL file
       max_workers (int): Maximum number of parallel workers
+      max_records (int): Maximum number of records to process
   """
   script_dir = Path(__file__).parent
   input_path = script_dir / input_file
@@ -99,41 +109,39 @@ def process_input_data(input_file='input_data.jsonl', max_workers=5, max_records
     print(f'Error: Input file {input_path} not found!')
     return
 
-  # Load all customer data first
-  customers = []
+  # Load all questions
+  questions = []
   with open(input_path, 'r', encoding='utf-8') as f:
     for line_num, line in enumerate(f, 1):
       try:
-        customer_data = json.loads(line.strip())
-        customers.append((customer_data, line_num))
+        data = json.loads(line.strip())
+        questions.append((data.get('question', ''), line_num))
       except json.JSONDecodeError as e:
         print(f'Error parsing JSON on line {line_num}: {e}')
 
-  if not customers:
-    print('No valid customer data found!')
+  if not questions:
+    print('No valid questions found!')
     return
 
   # limit to the max records
-  customers = customers[:max_records]
+  questions = questions[:max_records]
 
-  print(f'Adding {len(customers)} sample traces using {max_workers} workers...')
+  print(f'Adding {len(questions)} sample traces using {max_workers} workers...')
 
   results = []
   error_count = 0
 
-  # Process customers in parallel
+  # Process questions in parallel
   with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    # Submit all tasks
-    future_to_customer = {
-      executor.submit(generate_email_for_customer, customer_data, line_num): (
-        customer_data,
+    future_to_question = {
+      executor.submit(generate_trace_for_question, question, line_num): (
+        question,
         line_num,
       )
-      for customer_data, line_num in customers
+      for question, line_num in questions
     }
 
-    # Collect results as they complete
-    for future in as_completed(future_to_customer):
+    for future in as_completed(future_to_question):
       result, error = future.result()
       if result:
         results.append(result)
@@ -152,10 +160,10 @@ def save_trace_id_sample():
     trace_id=trace_id,
     name='user_feedback',
     value=True,
-    rationale='I LOVE this email!',
+    rationale='Great defensive analysis with actionable insights!',
     source=mlflow.entities.AssessmentSource(
       source_type='HUMAN',
-      source_id='first.last@company.com',
+      source_id='coach@team.com',
     ),
   )
 
