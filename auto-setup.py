@@ -367,22 +367,20 @@ class AutoSetup:
       f'Available catalogs (showing {len(available_catalogs)} with VERIFIED '
       f'CREATE SCHEMA permissions):'
     )
-    catalog_list = list(available_catalogs.keys())
 
-    # Show suggested catalog first if it exists
+    # Build ordered display list: suggested first, then others
+    display_catalogs = []
     if suggested_catalog and suggested_catalog in available_catalogs:
-      print(f'   0. {suggested_catalog} (suggested) - {available_catalogs[suggested_catalog]}')
-      start_idx = 1
-    else:
-      start_idx = 0
-
-    # Show other catalogs
-    for i, (catalog_name, access_level) in enumerate(available_catalogs.items()):
+      display_catalogs.append(suggested_catalog)
+    for catalog_name in available_catalogs:
       if catalog_name != suggested_catalog:
-        print(f'   {start_idx + i}. {catalog_name} - {access_level}')
+        display_catalogs.append(catalog_name)
 
-    # Add option to manually enter catalog name
-    manual_entry_idx = len(catalog_list) + (1 if suggested_catalog in available_catalogs else 0)
+    for i, catalog_name in enumerate(display_catalogs):
+      suffix = ' (suggested)' if catalog_name == suggested_catalog else ''
+      print(f'   {i}. {catalog_name}{suffix} - {available_catalogs[catalog_name]}')
+
+    manual_entry_idx = len(display_catalogs)
     print(f'   {manual_entry_idx}. Enter catalog name manually')
 
     max_choice = manual_entry_idx
@@ -394,15 +392,8 @@ class AutoSetup:
         # Check if it's a number
         try:
           choice_num = int(choice)
-          if choice_num == 0 and suggested_catalog and suggested_catalog in available_catalogs:
-            return suggested_catalog
-          elif 1 <= choice_num <= len(catalog_list):
-            # Adjust index based on whether suggested catalog is shown
-            if suggested_catalog and suggested_catalog in available_catalogs:
-              selected_catalogs = [cat for cat in catalog_list if cat != suggested_catalog]
-              return selected_catalogs[choice_num - 1]
-            else:
-              return catalog_list[choice_num - 1]
+          if 0 <= choice_num < len(display_catalogs):
+            return display_catalogs[choice_num]
           elif choice_num == manual_entry_idx:
             # Manual entry option
             while True:
@@ -450,48 +441,40 @@ class AutoSetup:
       return new_schema or 'default'
 
     print('Available schemas:')
-    schema_list = list(available_schemas.keys())
 
-    # Show suggested schema first if it exists
+    # Build ordered display list: suggested first, then others
+    display_schemas = []
     if suggested_schema and suggested_schema in available_schemas:
-      print(f'   0. {suggested_schema} (suggested) - {available_schemas[suggested_schema]}')
-      start_idx = 1
-    else:
-      start_idx = 0
-
-    # Show other schemas
-    for i, (schema_name, access_level) in enumerate(available_schemas.items()):
+      display_schemas.append(suggested_schema)
+    for schema_name in available_schemas:
       if schema_name != suggested_schema:
-        print(f'   {start_idx + i}. {schema_name} - {access_level}')
+        display_schemas.append(schema_name)
 
-    create_option_num = len(schema_list) + (1 if suggested_schema in available_schemas else 0)
-    print(f'   {create_option_num}. Create new schema')
+    for i, schema_name in enumerate(display_schemas):
+      suffix = ' (suggested)' if schema_name == suggested_schema else ''
+      print(f'   {i}. {schema_name}{suffix} - {available_schemas[schema_name]}')
+
+    create_option_idx = len(display_schemas)
+    print(f'   {create_option_idx}. Create new schema')
+
+    max_choice = create_option_idx
 
     while True:
       try:
-        max_choice = len(schema_list) + (1 if suggested_schema in available_schemas else 0)
         choice = input(f'\nSelect schema (0-{max_choice}) or type schema name: ').strip()
 
         # Check if it's a number
         try:
           choice_num = int(choice)
-          if choice_num == 0 and suggested_schema and suggested_schema in available_schemas:
-            return suggested_schema
-          elif 1 <= choice_num <= len(schema_list):
-            # Adjust index based on whether suggested schema is shown
-            if suggested_schema and suggested_schema in available_schemas:
-              selected_schemas = [sch for sch in schema_list if sch != suggested_schema]
-              return selected_schemas[choice_num - 1]
-            else:
-              return schema_list[choice_num - 1]
-          elif choice_num == len(schema_list) + (1 if suggested_schema in available_schemas else 0):
+          if 0 <= choice_num < len(display_schemas):
+            return display_schemas[choice_num]
+          elif choice_num == create_option_idx:
             # Create new schema
             new_schema = input('Enter new schema name: ').strip()
             if new_schema:
               print(f'💡 Will create new schema: {new_schema}')
               return new_schema
           else:
-            max_choice = len(schema_list) + (1 if suggested_schema in available_schemas else 0)
             print(f'❌ Please enter a number between 0 and {max_choice}')
             continue
         except ValueError:
@@ -668,19 +651,19 @@ class AutoSetup:
 
     print('Available chat completion models:')
 
-    # Show suggested model first if it exists
+    # Build ordered display list: suggested first, then others
+    display_models = []
     if suggested_model and suggested_model in available_models:
-      print(f'   0. {suggested_model} (suggested)')
-      start_idx = 1
-    else:
-      start_idx = 0
-
-    # Show other models
-    for i, model_name in enumerate(available_models):
+      display_models.append(suggested_model)
+    for model_name in available_models:
       if model_name != suggested_model:
-        print(f'   {start_idx + i}. {model_name}')
+        display_models.append(model_name)
 
-    max_choice = len(available_models) - 1 + (1 if suggested_model in available_models else 0)
+    for i, model_name in enumerate(display_models):
+      suffix = ' (suggested)' if model_name == suggested_model else ''
+      print(f'   {i}. {model_name}{suffix}')
+
+    max_choice = len(display_models) - 1
 
     while True:
       try:
@@ -688,20 +671,13 @@ class AutoSetup:
 
         # Use default if empty
         if not choice:
-          return suggested_model or available_models[0]
+          return display_models[0]
 
         # Check if it's a number
         try:
           choice_num = int(choice)
-          if choice_num == 0 and suggested_model and suggested_model in available_models:
-            return suggested_model
-          elif 1 <= choice_num <= len(available_models):
-            # Adjust index based on whether suggested model is shown
-            if suggested_model and suggested_model in available_models:
-              selected_models = [model for model in available_models if model != suggested_model]
-              return selected_models[choice_num - 1]
-            else:
-              return available_models[choice_num - 1]
+          if 0 <= choice_num < len(display_models):
+            return display_models[choice_num]
           else:
             print(f'❌ Please enter a number between 0 and {max_choice}')
             continue
@@ -714,7 +690,7 @@ class AutoSetup:
             continue
 
       except KeyboardInterrupt:
-        return suggested_model or available_models[0]
+        return display_models[0]
 
   def _get_available_sql_warehouses(self) -> list:
     """Get list of available SQL warehouses from Databricks."""
