@@ -124,9 +124,9 @@ def run_evaluation():
   eval_results = mlflow.genai.evaluate(data=traces, scorers=SCORERS)
 
   print('\n📊 Evaluation completed!')
-  print(f'🆔 Run ID: {eval_results._run_id}')
+  print(f'🆔 Run ID: {eval_results.run_id}')
 
   # Generate and display evaluation links
-  generate_evaluation_links(eval_results._run_id)
+  generate_evaluation_links(eval_results.run_id)
 
   return eval_results
