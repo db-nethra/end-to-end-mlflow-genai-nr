@@ -983,18 +983,20 @@ class AutoSetup:
           success = False
           break
 
-      # Show final results
-      self._show_final_results(success)
-      return success
-
     except KeyboardInterrupt:
       print('\n⚠️  Setup interrupted by user')
-      self._show_final_results(False)
-      return False
+      success = False
     except Exception as e:
       print(f'\n❌ Unexpected error during setup: {e}')
-      self._show_final_results(False)
-      return False
+      success = False
+
+    # Show final results outside try/except to avoid double output on error
+    try:
+      self._show_final_results(success)
+    except Exception as e:
+      print(f'\n⚠️  Error displaying final results: {e}')
+
+    return success
 
   def _validate_prerequisites(self) -> bool:
     """Validate prerequisites before setup."""
@@ -1716,12 +1718,13 @@ class AutoSetup:
 
   def _get_app_url(self, app_name: str) -> str:
     """Get the URL of the deployed Databricks App."""
-    try:
-      app = self.client.apps.get(app_name)
-      if hasattr(app, 'url') and app.url:
-        return app.url
-    except Exception as e:
-      print(f'⚠️  Could not get app URL from API: {e}')
+    if self.client:
+      try:
+        app = self.client.apps.get(app_name)
+        if hasattr(app, 'url') and app.url:
+          return app.url
+      except Exception as e:
+        print(f'⚠️  Could not get app URL from API: {e}')
 
     # Fallback to constructed URL
     workspace_host = self.config.get('DATABRICKS_HOST', '').rstrip('/')
@@ -1732,12 +1735,19 @@ class AutoSetup:
     workspace_host = self._ensure_https_protocol(self.config.get('DATABRICKS_HOST', '')).rstrip('/')
     lha_source_code_path = self.config.get('LHA_SOURCE_CODE_PATH')
 
-    for i in self.client.workspace.list(
-      f'{lha_source_code_path}/mlflow_demo/notebooks', recursive=True
-    ):
-      if i.path and i.path.endswith(notebook_name):
-        return f'{workspace_host}/editor/notebooks/{i.resource_id}'
-    return 'NOT FOUND'
+    if not self.client or not lha_source_code_path:
+      return f'{workspace_host}/#workspace (notebook: {notebook_name})'
+
+    try:
+      for i in self.client.workspace.list(
+        f'{lha_source_code_path}/mlflow_demo/notebooks', recursive=True
+      ):
+        if i.path and i.path.endswith(notebook_name):
+          return f'{workspace_host}/editor/notebooks/{i.resource_id}'
+    except Exception as e:
+      print(f'⚠️  Could not list workspace notebooks: {e}')
+
+    return f'{workspace_host}/#workspace (notebook: {notebook_name})'
 
   def _ensure_https_protocol(self, host: str | None) -> str:
     """Ensure the host URL has HTTPS protocol."""
@@ -1776,7 +1786,6 @@ class AutoSetup:
         print(f'📱 Databricks App: {app_url}')
         print('   ↳ Interactive demo application ready to use')
       else:
-        workspace_path = self.config.get('LHA_SOURCE_CODE_PATH', '/Workspace/...')
         notebook_url = self._get_notebook_url('0_demo_overview')
         print(f'📓 Demo Overview Notebook: {notebook_url}')
         print('   ↳ Start here for interactive learning experience')
@@ -1827,12 +1836,11 @@ class AutoSetup:
       print('\n📊 Setup Progress:')
       self.progress.show_detailed_progress()
 
-      # For notebook-only mode, show the primary access link at the very bottom in a super obvious way
+      # For notebook-only mode, show the primary access link at the bottom
       if deployment_mode == 'notebook_only':
         print('\n\n' + '=' * 80)
         print('🚨 🚨 🚨  YOUR NOTEBOOK IS READY - CLICK HERE TO START  🚨 🚨 🚨')
         print('=' * 80)
-        workspace_path = self.config.get('LHA_SOURCE_CODE_PATH', '/Workspace/...')
         notebook_url = self._get_notebook_url('0_demo_overview')
         print(f'\n🎯 👉 START HERE: {notebook_url}')
         print('\n   ↳ This opens the Demo Overview Notebook - your starting point!')

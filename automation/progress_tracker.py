@@ -344,7 +344,7 @@ class ProgressTracker:
         Step ID of next step, or None if all done
     """
     for step_id, step in self.steps.items():
-      if step.status in [StepStatus.PENDING, StepStatus.FAILED]:
+      if step.status in [StepStatus.PENDING, StepStatus.FAILED, StepStatus.IN_PROGRESS]:
         # Check if dependencies are met
         deps_met = all(
           self.steps[dep_id].status in [StepStatus.COMPLETED, StepStatus.SKIPPED]
