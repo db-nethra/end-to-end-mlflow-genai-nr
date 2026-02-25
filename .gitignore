@@ -14,6 +14,7 @@ __pycache__/
 mlruns
 
 # Environment files
+.env
 .env.local
 .env.dev
 
