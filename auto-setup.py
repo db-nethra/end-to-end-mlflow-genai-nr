@@ -1422,8 +1422,22 @@ class AutoSetup:
       print(f'❌ Failed to create app: {e}')
       return False
 
+  def _execute_sql(self, sql: str) -> None:
+    """Execute a SQL statement via the SQL warehouse."""
+    warehouse_id = self.config.get('MLFLOW_TRACING_SQL_WAREHOUSE_ID')
+    if not warehouse_id:
+      raise Exception('MLFLOW_TRACING_SQL_WAREHOUSE_ID not configured')
+
+    response = self.client.statement_execution.execute_statement(
+      warehouse_id=warehouse_id,
+      statement=sql,
+      wait_timeout='30s',
+    )
+    if response.status and response.status.state.value == 'FAILED':
+      raise Exception(f'SQL failed: {response.status.error}')
+
   def _setup_permissions(self) -> bool:
-    """Setup permissions for app service principal."""
+    """Setup permissions for app service principal via SQL grants."""
     print('🔐 Setting up permissions...')
 
     if self.dry_run:
@@ -1433,45 +1447,64 @@ class AutoSetup:
     try:
       app_name = self.config['DATABRICKS_APP_NAME']
 
-      # Get app service principal (this should work after deployment)
+      # Get app service principal
       service_principal = self.resource_manager.get_app_service_principal(app_name)
 
-      if service_principal:
-        print(f'✅ Found app service principal: {service_principal}')
+      if not service_principal:
+        print(
+          '⚠️  App service principal not available yet - permissions may need to be set manually'
+        )
+        print("   This is normal if the app hasn't been deployed yet")
+        return True
 
-        # Grant catalog permissions first (USE CATALOG)
-        catalog_name = self.config['UC_CATALOG']
-        print(f'🔐 Granting catalog permissions on {catalog_name}...')
-        self.resource_manager.grant_catalog_permissions(
-          catalog_name, service_principal, permissions=['USE CATALOG']
+      # Resolve application_id for the service principal
+      application_id = self.resource_manager.get_service_principal_application_id(
+        service_principal
+      )
+      print(f'✅ Found app service principal: {service_principal} (ID: {application_id})')
+
+      catalog = self.config['UC_CATALOG']
+      schema = self.config['UC_SCHEMA']
+
+      # Grant USAGE on catalog and schema
+      grant_statements = [
+        f'GRANT USAGE ON CATALOG `{catalog}` TO `{application_id}`',
+        f'GRANT USAGE ON SCHEMA `{catalog}`.`{schema}` TO `{application_id}`',
+        f'GRANT CREATE FUNCTION, EXECUTE, MANAGE ON SCHEMA `{catalog}`.`{schema}` TO `{application_id}`',
+      ]
+
+      # Grant MODIFY + SELECT on UC trace tables
+      trace_tables = [
+        'mlflow_experiment_trace_otel_logs',
+        'mlflow_experiment_trace_otel_metrics',
+        'mlflow_experiment_trace_otel_spans',
+      ]
+      for table in trace_tables:
+        grant_statements.append(
+          f'GRANT MODIFY, SELECT ON TABLE `{catalog}`.`{schema}`.`{table}` TO `{application_id}`'
         )
 
-        # Grant schema permissions (ALL PERMISSIONS + MANAGE)
-        schema_name = f'{self.config["UC_CATALOG"]}.{self.config["UC_SCHEMA"]}'
-        print(f'🔐 Granting schema permissions on {schema_name}...')
-        self.resource_manager.grant_schema_permissions(
-          schema_name, service_principal, permissions=['ALL_PRIVILEGES', 'MANAGE']
-        )
+      for sql in grant_statements:
+        try:
+          self._execute_sql(sql)
+          print(f'   ✅ {sql}')
+        except Exception as e:
+          print(f'   ⚠️  {sql} — {e}')
 
-        # Grant experiment permissions (CAN MANAGE)
-        experiment_id = self.config['MLFLOW_EXPERIMENT_ID']
+      # Grant experiment permissions (CAN MANAGE) via SDK
+      experiment_id = self.config.get('MLFLOW_EXPERIMENT_ID')
+      if experiment_id:
         print(f'🔐 Granting experiment permissions on {experiment_id}...')
         self.resource_manager.grant_experiment_permissions(
           experiment_id, service_principal, permissions=['CAN_MANAGE']
         )
 
-        # Grant model serving endpoint access
-        llm_model = self.config.get('LLM_MODEL', 'databricks-claude-3-7-sonnet')
-        print(f'🔐 Granting model serving access to {llm_model}...')
-        self.resource_manager.grant_model_serving_permissions(app_name, llm_model)
+      # Grant model serving endpoint access via SDK
+      llm_model = self.config.get('LLM_MODEL', 'databricks-claude-3-7-sonnet')
+      print(f'🔐 Granting model serving access to {llm_model}...')
+      self.resource_manager.grant_model_serving_permissions(app_name, llm_model)
 
-        print('✅ Permissions set successfully')
-      else:
-        print(
-          '⚠️  App service principal not available yet - permissions may need to be set manually'
-        )
-        print("   This is normal if the app hasn't been deployed yet")
-
+      print('✅ Permissions set successfully')
       return True
     except Exception as e:
       print(f'⚠️  Permission setup had issues: {e}')
