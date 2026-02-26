@@ -142,13 +142,13 @@ fi
 
 if [ -n "$SAMPLE_LABELING_TRACE_ID" ]; then
   echo "🔧 Setting SAMPLE_LABELING_TRACE_ID to $SAMPLE_LABELING_TRACE_ID in app.yaml..."
-  sed -i.bak "s/value: 'placeholder-sample-labeling-trace-id'/value: '$SAMPLE_LABELING_TRACE_ID'/" app.yaml
+  sed -i.bak "s|value: 'placeholder-sample-labeling-trace-id'|value: '$SAMPLE_LABELING_TRACE_ID'|" app.yaml
   rm -f app.yaml.bak
 fi
 
 if [ -n "$SAMPLE_TRACE_ID" ]; then
   echo "🔧 Setting SAMPLE_TRACE_ID to $SAMPLE_TRACE_ID in app.yaml..."
-  sed -i.bak "s/value: 'placeholder-sample-trace-id'/value: '$SAMPLE_TRACE_ID'/" app.yaml
+  sed -i.bak "s|value: 'placeholder-sample-trace-id'|value: '$SAMPLE_TRACE_ID'|" app.yaml
   rm -f app.yaml.bak
 fi
 
