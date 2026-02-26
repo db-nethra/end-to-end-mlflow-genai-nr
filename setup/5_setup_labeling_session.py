@@ -55,36 +55,21 @@ from mlflow.genai import label_schemas
 
 
 def create_labeling_schemas():
-  """Create labeling schemas for human expert evaluation."""
+  """Create labeling schemas for human expert evaluation of DC assistant responses."""
   schemas = {}
 
   schema_configs = {
     'accuracy': {
-      'title': 'Are all facts accurate?',
-      'instruction': 'Check that all information comes from customer data with no fabrication or errors.',
-      'options': [
-        'All Facts Correct',
-        'Some Facts Incorrect',
-        'Major Errors/Fabrication',
-      ],
-    },
-    'personalized': {
-      'title': 'Is this email personalized?',
-      'instruction': "Evaluate if the email is tailored to this customer's specific situation and cannot be reused for others.",
-      'options': [
-        'Highly Personalized',
-        'Somewhat Personalized',
-        'Generic/Not Personalized',
-      ],
+      'title': 'Are all facts and statistics accurate?',
+      'instruction': 'Check that all statistics, player names, formations, and tendencies match the data returned by tools. No fabricated numbers or claims.',
     },
     'relevance': {
-      'title': 'Is the email relevant to this customer?',
-      'instruction': 'Check if urgent issues are prioritized first and content follows proper importance order.',
-      'options': [
-        'Perfectly Focused',
-        'Somewhat Focused',
-        'Poorly Focused',
-      ],
+      'title': 'Does the response address the question?',
+      'instruction': 'Evaluate if the response directly answers the specific question asked about opponent tendencies, game situations, or strategy.',
+    },
+    'actionability': {
+      'title': 'Are the defensive recommendations actionable?',
+      'instruction': 'Check if the response provides specific, implementable defensive adjustments or play calls that a coach could use in game planning.',
     },
   }
 
@@ -108,7 +93,7 @@ def create_labeling_schemas():
   return schemas
 
 
-def create_labeling_session(schemas, session_name='email_evaluation_session'):
+def create_labeling_session(schemas, session_name='dc_assistant_evaluation_session'):
   """Create a labeling session for human expert review."""
   try:
     schema_names = [schema.name for schema in schemas.values()]
@@ -128,17 +113,54 @@ def create_labeling_session(schemas, session_name='email_evaluation_session'):
 
 
 def add_traces_to_session(session):
-  """Add traces to a labeling session and return trace IDs."""
+  """Add traces to a labeling session and return trace IDs.
+
+  Uses the MLflow client API (not the legacy REST API) to link traces to the
+  labeling session's run, which supports UC-stored traces.
+  """
   # Normally, you would query for the relevant traces, here we just grab 3.
   traces = mlflow.search_traces(max_results=3)
-  session.add_traces(traces)
-  
+
+  if traces.empty:
+    print('No traces found to add to session.')
+    return None
+
+  # Extract trace IDs and Trace objects
+  trace_ids = traces['trace_id'].tolist()
+
+  # Get the backend session to access its run_id and item creation API
+  store = session._get_store()
+  backend_session = store._get_backend_session(session)
+
+  # Log each trace to the labeling session's experiment
+  from mlflow.entities import Trace
+  from databricks.rag_eval.review_app.utils import log_trace_to_experiment
+  logged_trace_ids = []
+  for trace_obj in traces['trace'].tolist():
+    # Deserialize JSON strings to Trace objects if needed
+    if isinstance(trace_obj, str):
+      trace_obj = Trace.from_json(trace_obj)
+    logged_trace = log_trace_to_experiment(trace_obj, backend_session.experiment_id)
+    logged_trace_ids.append(logged_trace.info.trace_id)
+
+  # Use the new MLflow client API to link traces to the labeling session's run
+  # (instead of the legacy databricks/rag_eval REST API which doesn't support UC traces)
+  if backend_session.mlflow_run_id and logged_trace_ids:
+    client = mlflow.MlflowClient()
+    client.link_traces_to_run(
+      run_id=backend_session.mlflow_run_id,
+      trace_ids=logged_trace_ids,
+    )
+
+  # Add trace items to the labeling session
+  from databricks.rag_eval.review_app.entities import _get_client
+  _get_client().batch_create_items_in_labeling_session(backend_session, trace_ids=logged_trace_ids)
+
+  print(f'Added {len(logged_trace_ids)} traces to labeling session')
+
   # Return the first trace ID for the UI to use
-  if not traces.empty:
-    # Get the first trace ID from the DataFrame
-    first_trace_id = traces.iloc[0]['trace_id']
-    return first_trace_id
-  return None
+  first_trace_id = traces.iloc[0]['trace_id']
+  return first_trace_id
 
 
 # Usage example
