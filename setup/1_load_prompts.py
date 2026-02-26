@@ -12,7 +12,7 @@ import dotenv
 dotenv.load_dotenv(project_root / '.env.local')
 
 # allow databricks-cli auth to take over
-os.environ.pop('DATABRICKS_HOST', None)
+os.environ.pop('DATABRICKS_TOKEN', None)
 
 import logging
 logging.getLogger("urllib3").setLevel(logging.ERROR)
@@ -35,7 +35,7 @@ import mlflow
 prompt = mlflow.genai.register_prompt(
   name=f'{UC_CATALOG}.{UC_SCHEMA}.{PROMPT_NAME}',
   template=ORIGINAL_PROMPT_TEMPLATE,
-  commit_message='Initial email generation template',
+  commit_message='Initial NFL DC assistant system prompt',
 )
 
 
@@ -47,7 +47,7 @@ mlflow.genai.set_prompt_alias(
   version=prompt.version,
 )
 
-print(f'added alias `production`to prompt: {prompt.name}@{prompt.version}')
+print(f'added alias `production` to prompt: {prompt.name}@{prompt.version}')
 
 
 # Set MLflow Experiment to load prompts from the UC schema
@@ -56,4 +56,3 @@ tags = {
 }
 
 mlflow.set_experiment_tags(tags)
-

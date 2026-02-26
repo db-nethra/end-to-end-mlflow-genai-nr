@@ -31,6 +31,8 @@ client/package-lock.json
 # Generated API client
 client/src/fastapi_client/
 
+#local mlflow db
+mlflow.db
 
 email_app/
 
