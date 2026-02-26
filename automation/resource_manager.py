@@ -208,16 +208,36 @@ class DatabricksResourceManager:
         return app
 
       except Exception as create_error:
-        print(f'⚠️  Could not create app via SDK: {create_error}')
-        print(f"💡 App '{name}' will be created during deployment step")
-        self.created_resources.append(('app', name))
-
-        # Return a dummy app object as fallback
-        class DummyApp:
-          def __init__(self, name):
-            self.name = name
-
-        return DummyApp(name)
+        print(f'❌ Could not create app via SDK: {create_error}')
+        print(f"💡 Attempting to create app via CLI as fallback...")
+        try:
+          import subprocess
+          result = subprocess.run(
+            ['databricks', 'apps', 'create', name, '--no-compute', '--no-wait'],
+            capture_output=True, text=True, timeout=60,
+          )
+          if result.returncode == 0:
+            print(f"✅ Created Databricks App '{name}' via CLI")
+            self.created_resources.append(('app', name))
+            # Try to get the app object from SDK now that it exists
+            try:
+              return self.client.apps.get(name)
+            except Exception:
+              pass
+            class MinimalApp:
+              def __init__(self, n):
+                self.name = n
+            return MinimalApp(name)
+          else:
+            error_output = result.stderr or result.stdout
+            raise RuntimeError(
+              f"Failed to create app '{name}' via both SDK and CLI. "
+              f"SDK error: {create_error}. CLI error: {error_output}"
+            )
+        except subprocess.TimeoutExpired:
+          raise RuntimeError(
+            f"Failed to create app '{name}': SDK error: {create_error}. CLI timed out."
+          )
 
     except Exception as e:
       print(f"❌ Failed to create or check app '{name}': {e}")

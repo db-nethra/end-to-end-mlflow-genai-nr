@@ -150,7 +150,7 @@ class ProgressTracker:
         'id': 'validate_deployment',
         'name': 'Validate Deployment',
         'description': 'Test deployed app functionality',
-        'dependencies': ['setup_permissions'],
+        'dependencies': ['deploy_app'],
       },
       {
         'id': 'run_integration_tests',

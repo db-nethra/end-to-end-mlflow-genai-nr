@@ -238,6 +238,13 @@ if [ "$SYNC_ONLY" = true ]; then
   exit 0
 fi
 
+# Ensure the app exists before deploying (create if missing)
+if ! databricks apps get "$DATABRICKS_APP_NAME" --profile "$DATABRICKS_CONFIG_PROFILE" &>/dev/null; then
+  echo "📱 App '$DATABRICKS_APP_NAME' not found — creating it..."
+  databricks apps create "$DATABRICKS_APP_NAME" --no-compute --no-wait --profile "$DATABRICKS_CONFIG_PROFILE"
+  echo "✅ App created"
+fi
+
 databricks apps deploy $DATABRICKS_APP_NAME \
   --source-code-path "$LHA_SOURCE_CODE_PATH"\
   --profile "$DATABRICKS_CONFIG_PROFILE"
