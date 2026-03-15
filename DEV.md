@@ -20,7 +20,7 @@ Or manually clone `.env.template` to `.env.local`.
 
 ## Running the app locally
 
-See `./setup/use_app_locally.py` for how to run a local Python script that calls the email generation app.
+See `./setup/use_app_locally.py` for how to run a local Python script that calls the DC Assistant app.
 
 ## Tech Stack
 

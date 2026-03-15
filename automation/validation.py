@@ -343,7 +343,7 @@ class SetupValidator:
     try:
       catalog = config.get('UC_CATALOG')
       schema = config.get('UC_SCHEMA')
-      prompt_name = config.get('PROMPT_NAME', 'email_generation')
+      prompt_name = config.get('PROMPT_NAME', 'dc_assistant_system_prompt')
 
       if not all([catalog, schema, prompt_name]):
         return False

@@ -867,6 +867,8 @@ class AutoSetup:
             success = self._show_installation_preview()
           elif next_step == 'create_catalog_schema':
             success = self._create_catalog_schema()
+          elif next_step == 'create_uc_tools':
+            success = self._create_uc_tools()
           elif next_step == 'create_experiment':
             success = self._create_experiment()
           elif next_step == 'create_app':
@@ -879,6 +881,8 @@ class AutoSetup:
             success = self._install_dependencies()
           elif next_step == 'load_sample_data':
             success = self._load_sample_data()
+          elif next_step == 'create_labeling_session':
+            success = self._create_labeling_session()
           elif next_step == 'validate_local_setup':
             success = self._validate_local_setup()
           elif next_step == 'deploy_app':
@@ -1284,6 +1288,52 @@ class AutoSetup:
       print(f'❌ Failed to set up catalog/schema: {e}')
       return False
 
+  def _create_uc_tools(self) -> bool:
+    """Create Unity Catalog SQL functions for the agent."""
+    catalog = self.config['UC_CATALOG']
+    schema = self.config['UC_SCHEMA']
+
+    print(f'Creating UC functions in {catalog}.{schema}...')
+
+    if self.dry_run:
+      print(f'   [DRY RUN] Would create UC SQL functions in {catalog}.{schema}')
+      return True
+
+    try:
+      from setup.create_uc_tools import create_uc_functions, get_or_create_warehouse
+
+      warehouse_id = get_or_create_warehouse(self.client)
+      if not warehouse_id:
+        print('   No SQL warehouse found. Searching for any available warehouse...')
+        # Try to use warehouse from config
+        warehouse_id = self.config.get('SQL_WAREHOUSE_ID')
+
+      if not warehouse_id:
+        print('   No SQL warehouse available. Please create a SQL warehouse and re-run setup.')
+        return False
+
+      print(f'   Using SQL warehouse: {warehouse_id}')
+
+      results = create_uc_functions(self.client, catalog, schema, warehouse_id)
+
+      if results['failed']:
+        print(f'   Some functions failed to create: {results["failed"]}')
+        print('   The agent may not work correctly without all functions.')
+        # Don\'t fail the whole setup - some functions may already exist
+        if len(results['created']) == 0:
+          return False
+
+      # Update config with the tool names
+      tool_names = [f'{catalog}.{schema}.{name}' for name in results['created']]
+      self.config['UC_TOOL_NAMES'] = tool_names
+      self.created_resources['uc_functions'] = results['created']
+
+      return True
+
+    except Exception as e:
+      print(f'   Failed to create UC functions: {e}')
+      return False
+
   def _create_experiment(self) -> bool:
     """Create MLflow experiment automatically."""
     # Get app name from config for experiment naming
@@ -1456,6 +1506,75 @@ class AutoSetup:
           f.write(f'{key}="{value}"\n')
 
       print(f'✅ Created {env_file}')
+
+      # Also generate config/dc_assistant.json (single source of truth for the agent)
+      import json
+
+      catalog = self.config.get('UC_CATALOG', '')
+      schema = self.config.get('UC_SCHEMA', '')
+      experiment_id = self.config.get('MLFLOW_EXPERIMENT_ID', '')
+      prompt_name = self.config.get('PROMPT_NAME', 'dc_assistant_system_prompt')
+      llm_model = self.config.get('LLM_MODEL', 'databricks-claude-3-7-sonnet')
+      host = self.config.get('DATABRICKS_HOST', '')
+      tool_names = self.config.get('UC_TOOL_NAMES', [])
+
+      dc_config = {
+        'workspace': {
+          'catalog': catalog,
+          'schema': schema,
+        },
+        'data_collection': {
+          'seasons': [2022, 2023, 2024],
+        },
+        'mlflow': {
+          'experiment_id': experiment_id,
+        },
+        'prompt_registry': {
+          'prompt_name': prompt_name,
+          'reflection_model': 'databricks:/databricks-claude-sonnet-4',
+        },
+        'llm': {
+          'endpoint_name': llm_model,
+          'judge_model': 'databricks:/databricks-claude-sonnet-4',
+        },
+        'model': {
+          'model_name': 'dc_assistant',
+          'uc_model_name': f'{catalog}.{schema}.dc_assistant',
+        },
+        'evaluation': {
+          'dataset_name': f'{catalog}.{schema}.dc_assistant_eval_trace_data',
+          'label_schema_name': 'football_analysis_base',
+          'labeling_session_name': 'dcassistant_eval_labeling',
+          'assigned_users': [],
+        },
+        'judges': {
+          'aligned_judge_name': 'football_analysis_judge_align',
+        },
+        'optimization': {
+          'optimization_dataset_name': f'{catalog}.{schema}.dcassistant_optimization_data',
+        },
+        'alignment': {
+          'alignment_runs_table': f'{catalog}.{schema}.alignment_runs',
+        },
+        'tools': {
+          'uc_tool_names': tool_names,
+        },
+        'prompt_registry_auth': {
+          'use_oauth': True,
+          'secret_scope_name': 'dc-assistant-secrets',
+          'oauth_client_id_key': 'oauth-client-id',
+          'oauth_client_secret_key': 'oauth-client-secret',
+          'databricks_host': host,
+        },
+      }
+
+      config_dir = self.project_root / 'config'
+      config_dir.mkdir(exist_ok=True)
+      config_file = config_dir / 'dc_assistant.json'
+      with open(config_file, 'w') as f:
+        json.dump(dc_config, f, indent=2)
+      print(f'✅ Created {config_file}')
+
       return True
     except Exception as e:
       print(f'❌ Failed to create environment file: {e}')
@@ -1516,6 +1635,102 @@ class AutoSetup:
     except Exception as e:
       print(f'❌ Failed to load sample data: {e}')
       return False
+
+  def _create_labeling_session(self) -> bool:
+    """Create master labeling session with football analysis schema and recent traces."""
+    print('Creating master labeling session...')
+
+    if self.dry_run:
+      print('   [DRY RUN] Would create labeling session')
+      return True
+
+    try:
+      import mlflow
+      from mlflow.genai import create_labeling_session, label_schemas
+
+      experiment_id = self.config.get('MLFLOW_EXPERIMENT_ID')
+      if not experiment_id:
+        print('   No experiment ID configured, skipping labeling session')
+        return True
+
+      mlflow.set_tracking_uri('databricks')
+      mlflow.set_experiment(experiment_id=experiment_id)
+
+      # Create label schema matching the football_analysis_base judge name
+      LABEL_SCHEMA_NAME = 'football_analysis_base'
+      try:
+        label_schemas.create_label_schema(
+          name=LABEL_SCHEMA_NAME,
+          type='feedback',
+          title=LABEL_SCHEMA_NAME,
+          input=label_schemas.InputCategorical(
+            options=['1', '2', '3', '4', '5'],
+          ),
+          instruction=(
+            'Evaluate if the response appropriately analyzes the available data and provides '
+            'an actionable recommendation for the question. The response should be accurate, '
+            'contextually relevant, and give a strategic advantage to the person making the request. '
+            '\n\n Your grading criteria should be: '
+            '\n 1: Completely unacceptable. Incorrect data interpretation or no recommendations'
+            '\n 2: Mostly unacceptable. Irrelevant or spurious feedback or weak recommendations'
+            '\n 3: Somewhat acceptable. Relevant feedback provided with some strategic advantage'
+            '\n 4: Mostly acceptable. Relevant feedback provided with strong strategic advantage'
+            '\n 5: Completely acceptable. Relevant feedback with excellent strategic advantage'
+          ),
+          enable_comment=True,
+        )
+        print(f'   Created label schema: {LABEL_SCHEMA_NAME}')
+      except Exception:
+        print(f'   Label schema {LABEL_SCHEMA_NAME} already exists, reusing')
+
+      # Create the master labeling session
+      session = create_labeling_session(
+        name='master_session',
+        assigned_users=[],
+        label_schemas=[LABEL_SCHEMA_NAME],
+      )
+      print(f'   Created labeling session: master_session')
+
+      # Add recent traces to the session
+      traces = mlflow.search_traces(
+        locations=[experiment_id],
+        filter_string='status = "OK"',
+        max_results=20,
+        order_by=['timestamp DESC'],
+        return_type='pandas',
+      )
+
+      if len(traces) > 0:
+        if 'inputs' not in traces.columns and 'request' in traces.columns:
+          traces = traces.rename(columns={'request': 'inputs'})
+        if 'outputs' not in traces.columns and 'response' in traces.columns:
+          traces = traces.rename(columns={'response': 'outputs'})
+
+        from mlflow.genai.datasets import create_dataset, get_dataset
+
+        catalog = self.config.get('UC_CATALOG', '')
+        schema = self.config.get('UC_SCHEMA', '')
+        dataset_name = f'{catalog}.{schema}.dc_labeling_dataset'
+        try:
+          ds = get_dataset(name=dataset_name)
+        except Exception:
+          ds = create_dataset(name=dataset_name)
+
+        ds.merge_records(traces)
+        session.add_dataset(dataset_name=dataset_name)
+        print(f'   Added {len(traces)} traces to labeling session')
+
+      session_url = session.url if hasattr(session, 'url') else None
+      if session_url:
+        self.created_resources['labeling_session_url'] = session_url
+        print(f'   Review App URL: {session_url}')
+
+      return True
+
+    except Exception as e:
+      print(f'   Failed to create labeling session: {e}')
+      print('   You can create one manually from the app UI')
+      return True  # Don't fail setup for this
 
   def _validate_local_setup(self) -> bool:
     """Validate local setup by running development server briefly."""

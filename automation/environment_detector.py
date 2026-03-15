@@ -262,7 +262,7 @@ class EnvironmentDetector:
 
     suggestions = {
       'app_name': app_name,
-      'prompt_name': 'email_generation',  # Fixed name from existing setup
+      'prompt_name': 'dc_assistant_system_prompt',  # Fixed name from existing setup
       'prompt_alias': 'production',  # Fixed alias from existing setup
     }
 
@@ -357,7 +357,7 @@ class EnvironmentDetector:
     config = {
       # Fixed values from existing setup
       'MLFLOW_ENABLE_ASYNC_TRACE_LOGGING': 'false',
-      'PROMPT_NAME': 'email_generation',
+      'PROMPT_NAME': 'dc_assistant_system_prompt',
       'PROMPT_ALIAS': 'production',
       'MLFLOW_TRACKING_URI': 'databricks',
     }

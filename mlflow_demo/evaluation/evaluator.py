@@ -1,10 +1,11 @@
-"""MLflow evaluation logic for email generation."""
+"""MLflow evaluation logic for DC Assistant football analysis."""
 
 import os
 
 import mlflow
-from mlflow.genai.judges import is_grounded, meets_guidelines
-from mlflow.genai.scorers import Guidelines, scorer
+from mlflow.genai.judges import meets_guidelines
+from mlflow.genai.scorers import Guidelines, RelevanceToQuery, scorer
+from mlflow.genai import make_judge
 
 from mlflow_demo.utils.mlflow_helpers import generate_evaluation_links
 
@@ -27,157 +28,36 @@ FIX_DATASET_NAME = 'low_accuracy'
 UC_CATALOG = os.environ.get('UC_CATALOG')
 UC_SCHEMA = os.environ.get('UC_SCHEMA')
 
-# Tone of voice Guideline - Ensure professional tone
-tone = Guidelines(name='tone', guidelines="""The response maintains a professional tone.""")
+# Football Language Guideline - Ensure appropriate professional football terminology
+football_language_judge = Guidelines(
+  name='football_language',
+  guidelines='The response must use language that is appropriate for professional football players and coaches',
+)
 
-
-# Accuracy Guideline - Verify all facts come from provided data
-@scorer
-def accuracy(trace):
-  """Custom accuracy scorer that evaluates only the email body content.
-
-  Excluding the subject line to avoid false negatives on creative/generic subjects.
-
-  This demonstrates how to wrap the proven Guidelines judge with custom data extraction.
-  """
-  import json
-  from mlflow.genai.judges import is_grounded, meets_guidelines
-
-  # Extract the original request
-  outputs = json.loads(trace.data.response)
-  email_body = outputs.get('email_body')
-  input_facts = trace.search_spans(span_type='RETRIEVER')[0].outputs
-
-  accuracy_guideline = """The email_body correctly references all factual information from the provided_info based on these rules:
-- All factual information must be directly sourced from the provided data with NO fabrication
-- Names, dates, numbers, and company details must be 100% accurate with no errors
-- Meeting discussions must be summarized with the exact same sentiment and priority as presented in the data
-- Support ticket information must include correct ticket IDs, status, and resolution details when available
-- All product usage statistics must be presented with the same metrics provided in the data
-- No references to CloudFlow features, services, or offerings unless specifically mentioned in the customer data
-- It is OK if the email_body follows the user_input request to omit certain facts, as long as no fabricated facts are introduced"""
-
-  # Use the proven Guidelines judge with our extracted email body
-  return meets_guidelines(
-    guidelines=accuracy_guideline,
-    context={'provided_info': input_facts, 'email': email_body},
-  )
-
-
-# Personalization Guideline - Ensure emails are tailored to specific customers
-@scorer
-def personalized(trace):
-  """Custom personalization scorer that evaluates only the email body content.
-
-  Excluding the subject line to avoid false negatives on creative/generic subjects.
-
-  This demonstrates how to wrap the proven Guidelines judge with custom data extraction.
-  """
-  import json
-  from mlflow.genai.judges import is_grounded, meets_guidelines
-
-  # Extract the original request
-  outputs = json.loads(trace.data.response)
-  email_body = outputs.get('email_body')
-  user_input = outputs.get('user_input')
-  input_facts = trace.search_spans(span_type='RETRIEVER')[0].outputs
-
-  personalized_guideline = """The email_body demonstrates clear personalization based on the provided_info based on these rules:
-- Email must begin by referencing the most recent meeting/interaction
-- Immediately next, the email must address the customer's MOST pressing concern as evidenced in the data
-- Content structure must be customized based on the account's health status (critical issues first for "Fair" or "Poor" accounts)
-- Industry-specific language must be used that reflects the customer's sector
-- Recommendations must ONLY reference features that are:
-  a) Listed as "least_used_features" in the data, AND
-  b) Directly related to the "potential_opportunity" field
-- Relationship history must be acknowledged (new vs. mature relationship)
-- Deal stage must influence communication approach (implementation vs. renewal vs. growth)"""
-# - AUTOMATIC FAIL if recommendations could be copied to another customer in a different situation"""
-
-  # Use the proven Guidelines judge with our extracted email body
-  return meets_guidelines(
-    guidelines=personalized_guideline,
-    context={'provided_info': input_facts, 'email': email_body, 'user_input': user_input},
-  )
-
-
-# Relevance Guideline - Prioritize content by urgency
-@scorer
-def relevance(trace):
-  """Custom relevance scorer that evaluates only the email body content.
-
-  Excluding the subject line to avoid false negatives on creative/generic subjects.
-
-  This demonstrates how to wrap the proven Guidelines judge with custom data extraction.
-  """
-  import json
-  from mlflow.genai.judges import is_grounded, meets_guidelines
-
-  # Extract the original request
-  outputs = json.loads(trace.data.response)
-  email_body = outputs.get('email_body')
-  user_input = outputs.get('user_input')
-  input_facts = trace.search_spans(span_type='RETRIEVER')[0].outputs
-
-  relevance_guideline = """The email_body prioritizes content that matters to the recipient in the provided_info based on these rules:
-- Critical support tickets (status="Open (Critical)") must be addressed after the greeting, reference to the most recent interaction, any pleasantries, and references to closed tickets
-- Time-sensitive action items must be addressed before general updates
-- Content must be ordered by descending urgency as defined by:
-  1. Critical support issues
-  2. Action items explicitly stated in most recent meeting
-  3. Upcoming renewal if within 30 days
-  4. Recently resolved issues
-  5. Usage trends and recommendations
-- No more than ONE feature recommendation for accounts with open critical issues
-- No mentions of company news, product releases, or success stories not directly requested by the customer
-- No calls to action unrelated to the immediate needs in the data"""
-# - AUTOMATIC FAIL if the email requests a meeting without being tied to a specific action item or opportunity in the data"""
-
-  # Use the proven Guidelines judge with our extracted email body
-  return meets_guidelines(
-    guidelines=relevance_guideline,
-    context={'provided_info': input_facts, 'email': email_body, 'user_input': user_input},
-  )
-
-
-# Groundedness Guideline - Ensure emails are grounded in provided facts
-@scorer
-def email_is_grounded(trace):
-  """Custom groundedness scorer that evaluates only the email body content.
-
-  Excluding the subject line to avoid false negatives on creative/generic subjects.
-
-  This demonstrates how to wrap the proven is_grounded judge with custom data extraction.
-  """
-  import json
-  from mlflow.genai.judges import is_grounded, meets_guidelines
-
-  # Extract the original request
-  outputs = json.loads(trace.data.response)
-  email_body = outputs.get('email_body')
-  user_input = outputs.get('user_input')
-  input_facts = trace.search_spans(span_type='RETRIEVER')[0].outputs
-
-  if user_input is None or len(user_input) == 0:
-    request = 'Generate an email based on the provided context.'
-  else:
-    request = (
-      "Generate an email based on the provided context, considering the user's request: "
-      + user_input
-    )
-
-  # Use the proven is_grounded judge with our extracted email body
-  return is_grounded(request=request, response=email_body, context=input_facts)
-
+# Football Analysis Judge - Custom judge with Likert scale for analysis quality
+football_analysis_judge = make_judge(
+  name='football_analysis_base',
+  instructions=(
+    'Evaluate if the response in {{ outputs }} appropriately analyzes the available data and provides an actionable recommendation '
+    'the question in {{ inputs }}. The response should be accurate, contextually relevant, and give a strategic advantage to the '
+    'person making the request. '
+    'Your grading criteria should be: '
+    ' 1: Completely unacceptable. Incorrect data interpretation or no recommendations'
+    ' 2: Mostly unacceptable. Irrelevant or spurious feedback or weak recommendations provided with minimal strategic advantage'
+    ' 3: Somewhat acceptable. Relevant feedback provided with some strategic advantage'
+    ' 4: Mostly acceptable. Relevant feedback provided with strong strategic advantage'
+    ' 5: Completely acceptable. Relevant feedback provided with excellent strategic advantage'
+  ),
+  feedback_value_type=int,
+)
 
 # Convenience list of all scorers for easy use in evaluation
-SCORERS = [tone, accuracy, personalized, relevance, email_is_grounded]
+SCORERS = [RelevanceToQuery(), football_analysis_judge, football_language_judge]
 
 
 def run_evaluation():
   """Run evaluation on recent traces."""
-  # A Scorer operates on a MLflow Trace, so let's retrieve a few Traces:
-  print('\n🔍 Loading recent traces from our email demo app...')
+  print('\nLoading recent traces from DC Assistant...')
 
   # Load recent traces for evaluation
   traces = mlflow.search_traces(
@@ -185,13 +65,13 @@ def run_evaluation():
     filter_string='status = "OK"',
     order_by=['timestamp DESC'],
   )
-  print(f'✅ Found {len(traces)} traces for evaluation')
+  print(f'Found {len(traces)} traces for evaluation')
 
-  # Now, let's run evaluation using this scorer
+  # Run evaluation using scorers
   eval_results = mlflow.genai.evaluate(data=traces, scorers=SCORERS)
 
-  print('\n📊 Evaluation completed!')
-  print(f'🆔 Run ID: {eval_results._run_id}')
+  print('\nEvaluation completed!')
+  print(f'Run ID: {eval_results._run_id}')
 
   # Generate and display evaluation links
   generate_evaluation_links(eval_results._run_id)

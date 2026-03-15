@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Optional
 
 import mlflow
@@ -274,3 +275,151 @@ async def run_session_evaluation(request: RunSessionEvalRequest):
       'X-Accel-Buffering': 'no',
     },
   )
+
+
+class ReviewAppResponse(BaseModel):
+  """Response with the review app URL."""
+
+  success: bool
+  url: Optional[str] = None
+  error: Optional[str] = None
+
+
+@router.get('/review-app-url', response_model=ReviewAppResponse)
+async def get_review_app_url():
+  """Get the review app URL for the most recent labeling session."""
+  try:
+    from mlflow.genai import get_labeling_sessions
+
+    exp_id = get_mlflow_experiment_id()
+    mlflow.set_experiment(experiment_id=exp_id)
+
+    # Find the most recent labeling session with the football_analysis_base schema
+    sessions = get_labeling_sessions()
+    if sessions:
+      # Prefer sessions with the football_analysis_base schema
+      for s in reversed(sessions):
+        schemas = s.label_schemas if hasattr(s, 'label_schemas') else []
+        if 'football_analysis_base' in schemas:
+          url = s.url if hasattr(s, 'url') else None
+          if url:
+            return ReviewAppResponse(success=True, url=url)
+
+      # Fallback to most recent session if none match
+      latest = sessions[-1]
+      url = latest.url if hasattr(latest, 'url') else None
+      if url:
+        return ReviewAppResponse(success=True, url=url)
+
+    # Fallback: return the review app root
+    from mlflow.genai import get_review_app
+    review_app = get_review_app(experiment_id=exp_id)
+    url = review_app.url if hasattr(review_app, 'url') else None
+    return ReviewAppResponse(success=True, url=url)
+
+  except Exception as e:
+    logger.error(f'Failed to get review app URL: {e}')
+    return ReviewAppResponse(success=False, error=str(e))
+
+
+class CreateLabelingSessionResponse(BaseModel):
+  """Response from creating a labeling session."""
+
+  success: bool
+  session_url: Optional[str] = None
+  session_name: Optional[str] = None
+  error: Optional[str] = None
+
+
+@router.post('/create-labeling-session', response_model=CreateLabelingSessionResponse)
+async def create_labeling_session_endpoint():
+  """Create labeling schemas, a labeling session, and add recent traces for SME review."""
+  try:
+    from mlflow.genai import create_labeling_session, label_schemas
+
+    exp_id = get_mlflow_experiment_id()
+    mlflow.set_experiment(experiment_id=exp_id)
+
+    # Ensure label schema exists (matches the football_analysis_base judge name)
+    # CRITICAL: schema name must match judge name for align() to work
+    LABEL_SCHEMA_NAME = 'football_analysis_base'
+    try:
+      label_schemas.create_label_schema(
+        name=LABEL_SCHEMA_NAME,
+        type='feedback',
+        title=LABEL_SCHEMA_NAME,
+        input=label_schemas.InputCategorical(
+          options=['1', '2', '3', '4', '5'],
+        ),
+        instruction=(
+          'Evaluate if the response appropriately analyzes the available data and provides an actionable recommendation '
+          'for the question. The response should be accurate, contextually relevant, and give a strategic advantage to the '
+          'person making the request. '
+          '\n\n Your grading criteria should be: '
+          '\n 1: Completely unacceptable. Incorrect data interpretation or no recommendations'
+          '\n 2: Mostly unacceptable. Irrelevant or spurious feedback or weak recommendations provided with minimal strategic advantage'
+          '\n 3: Somewhat acceptable. Relevant feedback provided with some strategic advantage'
+          '\n 4: Mostly acceptable. Relevant feedback provided with strong strategic advantage'
+          '\n 5: Completely acceptable. Relevant feedback provided with excellent strategic advantage'
+        ),
+        enable_comment=True,
+      )
+      logger.info(f'Created label schema: {LABEL_SCHEMA_NAME}')
+    except Exception as schema_err:
+      # Schema already exists — that's fine, reuse it
+      logger.info(f'Label schema {LABEL_SCHEMA_NAME} already exists, reusing: {schema_err}')
+
+    # Create the labeling session
+    session_name = f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_dc_assistant_review'
+    session = create_labeling_session(
+      name=session_name,
+      assigned_users=[],
+      label_schemas=[LABEL_SCHEMA_NAME],
+    )
+    logger.info(f'Created labeling session: {session_name}')
+
+    # Search for recent OK traces and add them to the session
+    traces = mlflow.search_traces(
+      locations=[exp_id],
+      filter_string='status = "OK"',
+      max_results=20,
+      order_by=['timestamp DESC'],
+      return_type='pandas',
+    )
+
+    if len(traces) > 0:
+      # Rename columns for merge_records compatibility
+      if 'inputs' not in traces.columns and 'request' in traces.columns:
+        traces = traces.rename(columns={'request': 'inputs'})
+      if 'outputs' not in traces.columns and 'response' in traces.columns:
+        traces = traces.rename(columns={'response': 'outputs'})
+
+      from mlflow.genai.datasets import create_dataset, get_dataset
+
+      catalog = os.environ.get('UC_CATALOG', '')
+      schema = os.environ.get('UC_SCHEMA', '')
+      dataset_name = f'{catalog}.{schema}.dc_labeling_dataset'
+      try:
+        ds = get_dataset(name=dataset_name)
+      except Exception:
+        ds = create_dataset(name=dataset_name)
+
+      ds.merge_records(traces)
+      session.add_dataset(dataset_name=dataset_name)
+      logger.info(f'Added {len(traces)} traces to labeling session')
+
+    session_url = session.url if hasattr(session, 'url') else None
+    logger.info(f'Labeling session URL: {session_url}')
+
+    return CreateLabelingSessionResponse(
+      success=True,
+      session_url=session_url,
+      session_name=session_name,
+    )
+
+  except Exception as e:
+    logger.error(f'Failed to create labeling session: {e}')
+    return CreateLabelingSessionResponse(
+      success=False,
+      error=str(e),
+    )

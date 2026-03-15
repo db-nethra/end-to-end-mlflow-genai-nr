@@ -1,0 +1,57 @@
+{
+  "workspace": {
+    "catalog": "YOUR_CATALOG",
+    "schema": "YOUR_SCHEMA"
+  },
+  "data_collection": {
+    "seasons": [2022, 2023, 2024]
+  },
+  "mlflow": {
+    "experiment_id": "YOUR_EXPERIMENT_ID"
+  },
+  "prompt_registry": {
+    "prompt_name": "dc_assistant_system_prompt",
+    "reflection_model": "databricks:/databricks-claude-sonnet-4"
+  },
+  "llm": {
+    "endpoint_name": "databricks-claude-3-7-sonnet",
+    "judge_model": "databricks:/databricks-claude-sonnet-4"
+  },
+  "model": {
+    "model_name": "dc_assistant",
+    "uc_model_name": "YOUR_CATALOG.YOUR_SCHEMA.dc_assistant"
+  },
+  "evaluation": {
+    "dataset_name": "YOUR_CATALOG.YOUR_SCHEMA.dc_assistant_eval_trace_data",
+    "label_schema_name": "football_analysis_base",
+    "labeling_session_name": "dcassistant_eval_labeling",
+    "assigned_users": ["YOUR_EMAIL@databricks.com"]
+  },
+  "judges": {
+    "aligned_judge_name": "football_analysis_judge_align"
+  },
+  "optimization": {
+    "optimization_dataset_name": "YOUR_CATALOG.YOUR_SCHEMA.dcassistant_optimization_data"
+  },
+  "alignment": {
+    "alignment_runs_table": "YOUR_CATALOG.YOUR_SCHEMA.alignment_runs"
+  },
+  "tools": {
+    "uc_tool_names": [
+      "YOUR_CATALOG.YOUR_SCHEMA.who_got_ball_by_down_distance",
+      "YOUR_CATALOG.YOUR_SCHEMA.screen_play_tendencies",
+      "YOUR_CATALOG.YOUR_SCHEMA.tendencies_by_down_distance",
+      "YOUR_CATALOG.YOUR_SCHEMA.tendencies_by_drive_start",
+      "YOUR_CATALOG.YOUR_SCHEMA.tendencies_by_offense_formation",
+      "YOUR_CATALOG.YOUR_SCHEMA.tendencies_two_minute_drill",
+      "YOUR_CATALOG.YOUR_SCHEMA.first_play_after_turnover"
+    ]
+  },
+  "prompt_registry_auth": {
+    "use_oauth": true,
+    "secret_scope_name": "dc-assistant-secrets",
+    "oauth_client_id_key": "oauth-client-id",
+    "oauth_client_secret_key": "oauth-client-secret",
+    "databricks_host": "https://YOUR_WORKSPACE.cloud.databricks.com/"
+  }
+}

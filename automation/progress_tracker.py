@@ -99,10 +99,16 @@ class ProgressTracker:
         'dependencies': ['show_installation_preview'],
       },
       {
+        'id': 'create_uc_tools',
+        'name': 'Create UC Functions',
+        'description': 'Create Unity Catalog SQL functions for the agent',
+        'dependencies': ['create_catalog_schema'],
+      },
+      {
         'id': 'create_experiment',
         'name': 'Create MLflow Experiment',
         'description': 'Create MLflow experiment for tracking',
-        'dependencies': ['create_catalog_schema'],
+        'dependencies': ['create_uc_tools'],
       },
       {
         'id': 'create_app',
@@ -129,10 +135,16 @@ class ProgressTracker:
         'dependencies': ['install_dependencies'],
       },
       {
+        'id': 'create_labeling_session',
+        'name': 'Create Labeling Session',
+        'description': 'Create master labeling session with football analysis schema and traces',
+        'dependencies': ['load_sample_data'],
+      },
+      {
         'id': 'validate_local_setup',
         'name': 'Validate Local Setup',
         'description': 'Test local development server functionality',
-        'dependencies': ['load_sample_data'],
+        'dependencies': ['create_labeling_session'],
       },
       {
         'id': 'setup_permissions',

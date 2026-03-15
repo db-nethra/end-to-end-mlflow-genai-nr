@@ -57,39 +57,6 @@ export function EvaluationBuilder() {
       description: "Are the tool calls efficient without redundancy?",
       enabled: true,
     },
-    {
-      name: "RetrievalGroundedness",
-      description: "Is the response grounded in retrieved information?",
-      enabled: false,
-      disabled: true,
-      disabledReason:
-        "The DC Assistant uses Unity Catalog SQL functions (not a vector search index) to retrieve data. If this agent used a vector search index for retrieval, this judge would measure whether the response is grounded in the retrieved documents.",
-    },
-    {
-      name: "RetrievalRelevance",
-      description: "Are retrieved documents relevant to the user's request?",
-      enabled: false,
-      disabled: true,
-      disabledReason:
-        "The DC Assistant uses Unity Catalog SQL functions (not a vector search index) to retrieve data. If this agent used vector search, this judge would measure whether the retrieved documents are relevant to the query.",
-    },
-    {
-      name: "Correctness",
-      description: "Is the response correct compared to ground-truth answer?",
-      enabled: false,
-      disabled: true,
-      disabledReason:
-        "Requires a human-labeled ground truth dataset. If we had coaching staff label \"correct\" answers for common questions, this judge would compare the agent's response against those ground truths.",
-    },
-    {
-      name: "RetrievalSufficiency",
-      description:
-        "Do the retrieved documents contain all necessary information in the ground truth answer?",
-      disabledReason:
-        "Requires both a vector search retrieval step and human-labeled ground truth answers, neither of which apply to this demo.",
-      enabled: false,
-      disabled: true,
-    },
   ]);
 
   const [guidelines, setGuidelines] = React.useState(INITIAL_GUIDELINES);
@@ -415,6 +382,9 @@ export function EvaluationBuilder() {
                 </div>
               ))}
             </TooltipProvider>
+            <p className="text-xs text-muted-foreground mt-4 pt-3 border-t">
+              MLflow provides additional built-in judges for retrieval grounding, correctness, and more, as well as third-party judge integrations. <a href="https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/predefined-judge-scorers" target="_blank" rel="noopener noreferrer" className="underline text-blue-600 dark:text-blue-400">See the full list here</a>.
+            </p>
           </CardContent>
         </Card>
 
@@ -459,7 +429,7 @@ export function EvaluationBuilder() {
                         onChange={(e) =>
                           updateGuideline(guideline.id, "name", e.target.value)
                         }
-                        placeholder="e.g., Email Professionalism"
+                        placeholder="e.g., Football Analysis Quality"
                         className="mt-1"
                       />
                     </div>

@@ -146,7 +146,7 @@ EOF
 
     # Add fixed configuration variables
     echo "MLFLOW_ENABLE_ASYNC_TRACE_LOGGING=\"false\"" >> "$ENV_FILE"
-    echo "PROMPT_NAME=\"email_generation\"" >> "$ENV_FILE"
+    echo "PROMPT_NAME=\"dc_assistant_system_prompt\"" >> "$ENV_FILE"
     echo "PROMPT_ALIAS=\"production\"" >> "$ENV_FILE"
     echo "MLFLOW_TRACKING_URI=\"databricks\"" >> "$ENV_FILE"
 

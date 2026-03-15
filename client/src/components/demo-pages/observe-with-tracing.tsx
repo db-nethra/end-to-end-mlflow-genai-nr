@@ -80,70 +80,16 @@ const userFeedbackCode = `\`\`\`diff
   from typing import Optional, Dict, Any
   from pydantic import BaseModel
 
-  # The EmailGenerator class provides a log_feedback method
-  class EmailGenerator:
-+     # 🔍 FEEDBACK: Add method to log user feedback to traces
-      def log_feedback(
-          self,
-          trace_id: str,
-          value: bool,
-          comment: str = None,
-          user_name: str = None,
-      ) -> Dict[str, Any]:
-          """Log user feedback using MLflow 3 API.
-
-          Args:
-              trace_id: The trace ID to attach feedback to
-              value: True for positive feedback, False for negative
-              comment: Optional feedback comment
-              user_name: Optional user name
-
-          Returns:
-              Dict containing success status and message
-          """
-          try:
--             # Log feedback using mlflow.log_feedback (MLflow 3 API)
-+             # 🔍 FEEDBACK: Use mlflow.log_feedback to attach feedback to trace
-+             mlflow.log_feedback(  # [FEEDBACK-API] Links feedback to specific trace
-                  trace_id=trace_id,
-                  name='user_feedback',
-                  value=value,
-                  rationale=comment if comment else None,
-                  source=mlflow.entities.AssessmentSource(
-                      source_type='HUMAN',
-                      source_id=user_name or 'user',
-                  ),
-              )
-              return {'success': True, 'message': 'Feedback submitted successfully'}
-          except Exception as e:
-              return {'success': False, 'message': f'Error submitting feedback: {str(e)}'}
-
-  # Usage example - Submit positive feedback
-+ # 🔍 FEEDBACK: Call log_feedback with trace_id from generation
-  positive_feedback = email_generator.log_feedback(
-      trace_id=current_trace_id,  # Use trace_id from email generation
-      value=True,  # True = positive feedback
-      comment='Great email! The tone was perfect and it mentioned the product launch as requested.',
-      user_name=customer['sales_rep']['name'],
-  )
-
-  print(f'Feedback submitted: {positive_feedback["message"]}')
-
-  # Submit negative feedback
-  negative_feedback = email_generator.log_feedback(
-      trace_id=second_trace_id,
-      value=False,  # False = negative feedback
-      comment="The email was too generic and didn't capture our company's specific needs.",
-      user_name=customer['sales_rep']['name'],
-  )
++ # 🔍 FEEDBACK: Log user feedback directly to traces
++ # After the agent generates a response, attach feedback to the trace
 
   # Backend API implementation (FastAPI endpoint):
   @router.post('/feedback', response_model=FeedbackResponse)
   async def submit_feedback(feedback: FeedbackRequest):
       """Submit user feedback linked to trace."""
       try:
--         # Log feedback using mlflow.log_feedback
-+         # 🔍 FEEDBACK: Backend also uses mlflow.log_feedback
+-         # Log feedback without tracing
++         # 🔍 FEEDBACK: Use mlflow.log_feedback to attach feedback to trace
           mlflow.log_feedback(
               trace_id=feedback.trace_id,
               name='user_feedback',
@@ -151,7 +97,7 @@ const userFeedbackCode = `\`\`\`diff
               rationale=feedback.comment,
               source=mlflow.entities.AssessmentSource(
                   source_type='HUMAN',
-                  source_id=feedback.sales_rep_name or 'user',
+                  source_id=feedback.user_name or 'anonymous',
               ),
           )
 
@@ -165,68 +111,61 @@ const userFeedbackCode = `\`\`\`diff
               success=False,
               message=f'Error submitting feedback: {str(e)}'
           )
+
+  # Usage example - Submit positive feedback from the frontend
++ # 🔍 FEEDBACK: Call log_feedback with trace_id from agent response
+  positive_feedback = log_feedback(
+      trace_id=current_trace_id,  # Use trace_id from agent response
+      value=True,  # True = positive feedback
+      comment='Great analysis! The personnel package breakdown was exactly what I needed.',
+      user_name='coach_smith',
+  )
+
+  # Submit negative feedback
+  negative_feedback = log_feedback(
+      trace_id=second_trace_id,
+      value=False,  # False = negative feedback
+      comment="The analysis didn't account for the opponent's recent defensive scheme changes.",
+      user_name='coach_smith',
+  )
 \`\`\``;
 
 const advancedTracingCode = `\`\`\`diff
   from mlflow.entities import SpanType
   from typing import List, Dict, Any
 
-- # Basic function with no tracing
-- def _create_messages(customer_data: dict) -> List[Dict[str, str]]:
-+ # 🔍 ADVANCED: Add custom attributes and naming to traces
++ # 🔍 ADVANCED: Add custom span types and attributes to traces
 + @mlflow.trace(
-+     name="email-message-creation",  # [CUSTOM-NAME] Better than function name
-+     span_type=SpanType.LLM,  # [SPAN-TYPE] Categorize the span
-+     attributes={"component": "message_builder", "model": LLM_MODEL}  # [ATTRIBUTES]
++     name="tool-execution",  # [CUSTOM-NAME] Better than function name
++     span_type=SpanType.TOOL,  # [SPAN-TYPE] Categorize the span
++     attributes={"component": "uc_function", "catalog": UC_CATALOG}  # [ATTRIBUTES]
 + )
-+ def _create_messages(customer_data: dict) -> List[Dict[str, str]]:
-      """Create chat messages with detailed tracing."""
-      company_name = customer_data.get("company_name", "Unknown")
-
-      system_prompt = f"Generate a personalized email for {company_name}..."
-      user_prompt = f"Customer details: {json.dumps(customer_data)}"
-
-      return [
-          {"role": "system", "content": system_prompt},
-          {"role": "user", "content": user_prompt}
-      ]
+  def execute_tool(tool_name: str, args: dict) -> Any:
+      """Execute a Unity Catalog function with detailed tracing."""
+      result = uc_function_client.execute_function(tool_name, args)
+      return result.value if result.error is None else result.error
 
   # Using span context manager for detailed processing steps
-  @mlflow.trace
-  def generate_email_advanced(customer_data: dict) -> Dict[str, Any]:
-      """Generate email with detailed span tracking."""
-      set_app_version()
++ @mlflow.trace(name="dc_assistant_analysis")
+  def predict_stream_local(question: str) -> Generator[dict, None, None]:
+      """Stream analysis with detailed span tracking."""
 
--     # Process messages without tracking
--     messages = _create_messages(customer_data)
+-     # Build request without tracking
+-     request = ResponsesAgentRequest(input=[Message(role="user", content=question)])
 +     # 🔍 ADVANCED: Use span context manager for sub-operations
-+     with mlflow.start_span(name="message-preparation") as span:  # [SPAN-CONTEXT]
-+         span.set_inputs({"customer_data": customer_data})  # [SET-INPUTS]
-+         messages = _create_messages(customer_data)
-+         span.set_outputs({"message_count": len(messages)})  # [SET-OUTPUTS]
-
-      # OpenAI call (auto-traced by mlflow.openai.autolog())
-      response = openai_client.chat.completions.create(
-          model=LLM_MODEL,
-          messages=messages,
-      )
-
--     # Process response without tracking
--     response_content = response.choices[0].message.content
--     clean_string = _clean_json_response(response_content)
--     email_json = json.loads(clean_string)
-+     # 🔍 ADVANCED: Track response processing as separate span
-+     with mlflow.start_span(name="response-processing") as span:
-+         span.set_inputs({"raw_response": response.choices[0].message.content})
++     with mlflow.start_span(name="conversation_turn", span_type=SpanType.AGENT) as span:
++         span.set_inputs({"request": question})  # [SET-INPUTS]
 +
-+         response_content = response.choices[0].message.content
-+         clean_string = _clean_json_response(response_content)
-+         email_json = json.loads(clean_string)
-+         email_json['trace_id'] = _get_current_trace_id()
-+
-+         span.set_outputs({"processed_email": email_json})
++         request = ResponsesAgentRequest(input=[Message(role="user", content=question)])
 
-      return email_json
+          for event in self.predict_stream(request):
+              yield event
+
+-     # No response tracking
++         # 🔍 ADVANCED: Track response for clean display in MLflow UI
++         if full_response:
++             span.set_outputs({"response": full_response})  # [SET-OUTPUTS]
++             mlflow.update_current_trace(response_preview=full_response)
 \`\`\``;
 
 export function TracingDemo() {
@@ -249,7 +188,7 @@ The diff below shows exactly what to add (green lines with + symbols):`}
           <CodeSnippet
             code={simpleTracingCode}
             title=""
-            filename="email_generator.py"
+            filename="agent.py"
             language="diff"
           />
         </div>
@@ -269,7 +208,7 @@ The diff below shows the key additions for feedback logging:`}
           <CodeSnippet
             code={userFeedbackCode}
             title=""
-            filename="email_generator.py"
+            filename="agent.py"
             language="diff"
           />
         </div>
@@ -289,7 +228,7 @@ The diff below shows how to add advanced tracing features:`}
           <CodeSnippet
             code={advancedTracingCode}
             title="Advanced Tracing Features - What to Add"
-            filename="email_generator.py"
+            filename="agent.py"
             language="diff"
           />
         </div>

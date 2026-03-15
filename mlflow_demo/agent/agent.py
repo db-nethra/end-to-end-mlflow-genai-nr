@@ -51,10 +51,10 @@ dbutils = get_dbutils()
 # ============================================================================
 def load_config() -> dict:
     """Load configuration from file, JSON env var, or individual env vars."""
-    # Priority 1: Config file
-    config_path = Path(__file__).parent / "config" / "dc_assistant.json"
-    if config_path.exists():
-        return json.loads(config_path.read_text())
+    # Priority 1: Project root config (single source of truth, written by setup script)
+    root_config_path = Path(__file__).resolve().parents[2] / "config" / "dc_assistant.json"
+    if root_config_path.exists():
+        return json.loads(root_config_path.read_text())
 
     # Priority 2: JSON config env var
     config_env = os.getenv("DC_ASSISTANT_CONFIG_JSON")
@@ -71,7 +71,7 @@ def load_config() -> dict:
         # Build a minimal config from env vars
         return {
             "workspace": {
-                "catalog": uc_catalog or "ac_demo",
+                "catalog": uc_catalog or "main",
                 "schema": uc_schema or "dc_assistant"
             },
             "prompt_registry": {

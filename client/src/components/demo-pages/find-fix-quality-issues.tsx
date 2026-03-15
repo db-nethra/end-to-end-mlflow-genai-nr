@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink, Plus, UserCheck, BarChart3 } from "lucide-react";
 import { useQueryPreloadedResults } from "@/queries/useQueryPreloadedResults";
+import { useQueryExperiment } from "@/queries/useQueryTracing";
 import { NotebookReference } from "@/components/notebook-reference";
 
 const introContent = `
@@ -174,10 +175,57 @@ print(f'   {mlflow_ui_url}/experiments/{experiment_id}/traces')`
 export function PromptTesting() {
   const { data: preloadedResultsData, isLoading: isPreloadedResultsLoading } =
     useQueryPreloadedResults();
+  const { data: experimentData } = useQueryExperiment();
   const preloadedReviewAppUrl = preloadedResultsData?.sample_review_app_url;
 
-  const judgeAssessmentTraceUrl = "https://e2-demo-field-eng.cloud.databricks.com/ml/experiments/1879320556980726/traces?o=1444828305810485&sqlWarehouseId=862f1d757f0424f7&selectedEvaluationId=tr-77922f4435e77a874ce9bd825fe8ea5b";
-  const labelSchemasUrl = "https://e2-demo-field-eng.cloud.databricks.com/ml/experiments/1879320556980726/label-schemas?o=1444828305810485";
+  const [isCreatingSession, setIsCreatingSession] = React.useState(false);
+  const [sessionError, setSessionError] = React.useState<string | null>(null);
+  const [reviewAppUrl, setReviewAppUrl] = React.useState<string | null>(null);
+  const [isLoadingReviewApp, setIsLoadingReviewApp] = React.useState(true);
+
+  // Fetch the review app URL on mount
+  React.useEffect(() => {
+    const loadReviewAppUrl = async () => {
+      try {
+        const response = await fetch("/api/evaluation/review-app-url");
+        const data = await response.json();
+        if (data.success && data.url) {
+          setReviewAppUrl(data.url);
+        }
+      } catch (err) {
+        console.error("Failed to load review app URL:", err);
+      } finally {
+        setIsLoadingReviewApp(false);
+      }
+    };
+    loadReviewAppUrl();
+  }, []);
+
+  const createLabelingSession = async () => {
+    setIsCreatingSession(true);
+    setSessionError(null);
+    try {
+      const response = await fetch("/api/evaluation/create-labeling-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (data.success && data.session_url) {
+        window.open(data.session_url, "_blank");
+      } else {
+        setSessionError(data.error || "Failed to create labeling session");
+      }
+    } catch (err: any) {
+      setSessionError(err.message || "Failed to create labeling session");
+    } finally {
+      setIsCreatingSession(false);
+    }
+  };
+
+  // Build URLs dynamically from experiment data
+  const experimentBaseUrl = experimentData?.link?.split('?')[0] || '';
+  const judgeAssessmentTraceUrl = experimentBaseUrl ? `${experimentBaseUrl}/traces` : '';
+  const labelSchemasUrl = experimentBaseUrl ? `${experimentBaseUrl}/label-schemas` : '';
 
   const introSection = <MarkdownContent content={introContent} />;
 
@@ -236,8 +284,9 @@ export function PromptTesting() {
             <Button
               variant="open_mlflow_ui"
               size="lg"
+              disabled={!judgeAssessmentTraceUrl}
               onClick={() =>
-                window.open(judgeAssessmentTraceUrl, "_blank")
+                judgeAssessmentTraceUrl && window.open(judgeAssessmentTraceUrl, "_blank")
               }
             >
               <ExternalLink className="h-4 w-4 mr-2" />
@@ -258,8 +307,9 @@ export function PromptTesting() {
             <Button
               variant="open_mlflow_ui"
               size="lg"
+              disabled={!labelSchemasUrl}
               onClick={() =>
-                window.open(labelSchemasUrl, "_blank")
+                labelSchemasUrl && window.open(labelSchemasUrl, "_blank")
               }
             >
               <ExternalLink className="h-4 w-4 mr-2" />
@@ -277,18 +327,59 @@ export function PromptTesting() {
           </CardHeader>
           <CardContent className="space-y-3">
             <MarkdownContent content="A labeling session groups traces with your schemas and launches the Review App for coaching staff. The Review App is a polished, non-technical interface that doesn't require Databricks workspace access — just share the URL. Try labeling a trace yourself: review the question and analysis, evaluate against each quality dimension, add comments, and submit. Labels flow directly back into MLflow, linked to the original traces." />
-            <Button
-              variant="open_mlflow_ui"
-              size="lg"
-              disabled={isPreloadedResultsLoading || !preloadedReviewAppUrl}
-              onClick={() =>
-                preloadedReviewAppUrl &&
-                window.open(preloadedReviewAppUrl, "_blank")
-              }
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Launch Review App
-            </Button>
+
+            <div className="flex gap-3 flex-wrap">
+              <Button
+                variant="open_mlflow_ui"
+                size="lg"
+                disabled={isLoadingReviewApp || !reviewAppUrl}
+                onClick={() => reviewAppUrl && window.open(reviewAppUrl, "_blank")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Launch Review App
+              </Button>
+
+              <Button
+                size="lg"
+                variant="outline"
+                disabled={isCreatingSession}
+                onClick={createLabelingSession}
+              >
+                {isCreatingSession ? (
+                  <>
+                    <span className="animate-spin mr-2">&#8987;</span>
+                    Creating Session...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create New Labeling Session
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {sessionError && (
+              <p className="text-sm text-red-600 mt-2">{sessionError}</p>
+            )}
+
+            <p className="text-xs text-muted-foreground pt-2">
+              <strong>Developer view:</strong>{" "}
+              <a
+                href="#"
+                className="underline text-blue-600 dark:text-blue-400 hover:no-underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (experimentData?.link) {
+                    const baseUrl = experimentData.link.split('?')[0];
+                    window.open(`${baseUrl}/labeling-sessions`, "_blank");
+                  }
+                }}
+              >
+                View all labeling sessions in MLflow
+              </a>
+              {" "}to manage sessions, view label progress, and configure schemas.
+            </p>
             <div className="mt-4 p-3 bg-muted/50 rounded-lg border text-sm text-muted-foreground">
               <p>
                 <strong>Want a fully customizable Review App?</strong> Databricks provides an open-source custom Review App template you can iterate on and deploy with Claude Code.{" "}
