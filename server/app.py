@@ -36,7 +36,25 @@ async def lifespan(app: FastAPI):
   # Startup
   logger.info('Starting application...')
 
-  # No-op — auth is handled by the Databricks Apps runtime
+  # Workaround for MLflow bug (mlflow/mlflow#20112): MLflow doesn't read
+  # DATABRICKS_CLIENT_ID/SECRET env vars when the [DEFAULT] profile in
+  # ~/.databrickscfg is missing. In Databricks Apps, there's no .databrickscfg
+  # at all. Write one from the auto-injected SP credentials so MLflow can find them.
+  import os
+  from pathlib import Path
+  db_host = os.environ.get('DATABRICKS_HOST', '')
+  db_client_id = os.environ.get('DATABRICKS_CLIENT_ID', '')
+  db_client_secret = os.environ.get('DATABRICKS_CLIENT_SECRET', '')
+  databrickscfg = Path.home() / '.databrickscfg'
+  if db_client_id and db_client_secret and not databrickscfg.exists():
+    databrickscfg.write_text(
+      f'[DEFAULT]\n'
+      f'host = {db_host}\n'
+      f'client_id = {db_client_id}\n'
+      f'client_secret = {db_client_secret}\n'
+      f'auth_type = oauth-m2m\n'
+    )
+    logger.info('Created .databrickscfg for MLflow auth (workaround for mlflow#20112)')
 
   logger.info('Application startup complete')
 

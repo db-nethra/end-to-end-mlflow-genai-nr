@@ -168,8 +168,12 @@ def setup_authentication():
 WORKSPACE_CLIENT = setup_authentication()
 
 # Configure MLflow to use Unity Catalog registry
-# This ensures MLflow's internal client uses the correct registry and authentication
 mlflow.set_registry_uri("databricks-uc")
+
+# Set experiment from env var so traces go to the right place
+_experiment_id = os.environ.get("MLFLOW_EXPERIMENT_ID")
+if _experiment_id:
+    mlflow.set_experiment(experiment_id=_experiment_id)
 
 ############################################
 # Define your LLM endpoint and system prompt
@@ -385,6 +389,7 @@ class ToolCallingAgent(ResponsesAgent):
             item=self.create_text_output_item("Max iterations reached. Stopping.", str(uuid4())),
         )
 
+    @mlflow.trace(span_type=SpanType.AGENT)
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
         # Auto-generate session on first call
         if self.current_session_id is None:
