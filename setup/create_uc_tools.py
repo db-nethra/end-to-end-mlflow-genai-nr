@@ -34,44 +34,44 @@ def create_uc_functions(
 
     sql_content = sql_file.read_text()
 
-    # Split into individual CREATE OR REPLACE FUNCTION statements
-    # Each statement ends with a standalone ';' line
-    raw_statements = re.split(r'\n;\s*\n', sql_content)
+    # Split on CREATE OR REPLACE FUNCTION boundaries
+    # This handles cases where multiple functions are in one block
+    parts = re.split(r'(?=CREATE OR REPLACE FUNCTION\b)', sql_content)
     statements = []
-    for stmt in raw_statements:
-        stmt = stmt.strip()
-        if 'CREATE OR REPLACE FUNCTION' in stmt:
-            # Remove comment lines at the start
-            lines = stmt.split('\n')
-            clean_lines = []
-            started = False
-            for line in lines:
-                if line.strip().startswith('CREATE OR REPLACE'):
-                    started = True
-                if started:
-                    clean_lines.append(line)
-            statements.append('\n'.join(clean_lines))
+    for part in parts:
+        part = part.strip()
+        if part.startswith('CREATE OR REPLACE FUNCTION'):
+            # Remove trailing semicolons and comments after the function body
+            # The function body ends at the last closing paren before any trailing ;
+            statements.append(part.rstrip().rstrip(';').rstrip())
 
     print(f'Found {len(statements)} UC function definitions')
 
     results = {'created': [], 'failed': [], 'errors': []}
-
-    # Set catalog/schema context first
-    context_sql = f'USE CATALOG `{catalog}`; USE SCHEMA `{schema}`;'
 
     for stmt in statements:
         # Extract function name
         match = re.search(r'CREATE OR REPLACE FUNCTION\s+(\w+)', stmt)
         func_name = match.group(1) if match else 'unknown'
 
-        full_sql = f'{context_sql}\n{stmt}'
+        # Qualify the function name with catalog.schema
+        full_sql = stmt.replace(
+            f'CREATE OR REPLACE FUNCTION {func_name}',
+            f'CREATE OR REPLACE FUNCTION `{catalog}`.`{schema}`.{func_name}',
+        )
+        # Qualify all unqualified table references (FROM and JOIN)
+        full_sql = re.sub(
+            r'\b(football_pbp_data|football_participation)\b',
+            lambda m: f'`{catalog}`.`{schema}`.{m.group(0)}',
+            full_sql,
+        )
 
         try:
             # Execute via statement execution API
             response = client.statement_execution.execute_statement(
                 statement=full_sql,
                 warehouse_id=warehouse_id,
-                wait_timeout='60s',
+                wait_timeout='50s',
             )
 
             status = response.status

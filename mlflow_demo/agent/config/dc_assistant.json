@@ -25,6 +25,6 @@
     "secret_scope_name": "dc-assistant-secrets",
     "oauth_client_id_key": "oauth-client-id",
     "oauth_client_secret_key": "oauth-client-secret",
-    "databricks_host": "https://e2-demo-field-eng.cloud.databricks.com/"
+    "databricks_host": "https://e2-demo-field-eng.cloud.databricks.com"
   }
 }

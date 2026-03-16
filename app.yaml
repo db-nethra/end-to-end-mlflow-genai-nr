@@ -2,6 +2,15 @@ command: [
   "uvicorn",
   "server.app:app"
 ]
+resources:
+  - name: serving-endpoint
+    serving_endpoint:
+      name: databricks-claude-3-7-sonnet
+      permission: CAN_QUERY
+  - name: mlflow-experiment
+    experiment:
+      id: "1879320556980726"
+      permission: CAN_EDIT
 env:
   - name: 'MLFLOW_TRACKING_URI'
     value: 'databricks'

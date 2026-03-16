@@ -36,6 +36,8 @@ async def lifespan(app: FastAPI):
   # Startup
   logger.info('Starting application...')
 
+  # No-op — auth is handled by the Databricks Apps runtime
+
   logger.info('Application startup complete')
 
   yield

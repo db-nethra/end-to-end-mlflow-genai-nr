@@ -31,6 +31,9 @@ dependencies = [
   "ipykernel>=6.29.5",
   "ipywidgets>=8.1.7",
   "plotly>=6.2.0",
+  "backoff",
+  "polars>=1.0.0",
+  "nflreadpy",
 ]
 
 [dependency-groups]

@@ -51,10 +51,10 @@ dbutils = get_dbutils()
 # ============================================================================
 def load_config() -> dict:
     """Load configuration from file, JSON env var, or individual env vars."""
-    # Priority 1: Project root config (single source of truth, written by setup script)
-    root_config_path = Path(__file__).resolve().parents[2] / "config" / "dc_assistant.json"
-    if root_config_path.exists():
-        return json.loads(root_config_path.read_text())
+    # Priority 1: Config file
+    config_path = Path(__file__).parent / "config" / "dc_assistant.json"
+    if config_path.exists():
+        return json.loads(config_path.read_text())
 
     # Priority 2: JSON config env var
     config_env = os.getenv("DC_ASSISTANT_CONFIG_JSON")
@@ -178,7 +178,6 @@ PROMPT_URI_AGENT = f"prompts:/{UC_CATALOG}.{UC_SCHEMA}.{PROMPT_NAME}@production"
 try:
     SYSTEM_PROMPT = mlflow.genai.load_prompt(PROMPT_URI_AGENT)
 except Exception as e:
-    # For local development, use a default prompt if registry prompt doesn't exist
     warnings.warn(f"Could not load prompt from registry: {e}. Using default system prompt for local testing.")
     class FallbackPrompt:
         def format(self, **kwargs):
@@ -386,7 +385,6 @@ class ToolCallingAgent(ResponsesAgent):
             item=self.create_text_output_item("Max iterations reached. Stopping.", str(uuid4())),
         )
 
-    @mlflow.trace(span_type=SpanType.AGENT)
     def predict(self, request: ResponsesAgentRequest) -> ResponsesAgentResponse:
         # Auto-generate session on first call
         if self.current_session_id is None:
